@@ -1,0 +1,44 @@
+# Tarot Card Fortune Telling System Plugin Manifest
+name: tarot
+display_name: 塔罗牌
+description: 基于传统塔罗牌解读的占卜系统
+version: 1.0.0
+author: Fortune Teller Team
+
+# Module and class information
+module: fortune_system
+class: TarotFortuneSystem
+
+# Dependencies
+requires:
+  - random
+  - json
+
+# Configuration
+config:
+  data_dir: data/tarot
+
+# Input schema
+inputs:
+  question:
+    type: text
+    description: 你想要咨询的问题
+    required: true
+  spread:
+    type: select
+    description: 塔罗牌阵
+    options:
+      - single
+      - three_card
+      - celtic_cross
+      - relationship
+    required: true
+  focus_area:
+    type: select
+    description: 问题领域
+    options: ["爱情", "事业", "健康", "财富", "灵性", "一般"]
+    required: true
+  name:
+    type: text
+    description: 你的姓名（可选）
+    required: false

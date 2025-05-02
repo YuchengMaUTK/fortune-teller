@@ -1,0 +1,38 @@
+# Zodiac/Astrology Fortune Telling System Plugin Manifest
+name: zodiac
+display_name: 星座占星
+description: 基于西方占星学和十二星座的命运分析
+version: 1.0.0
+author: Fortune Teller Team
+
+# Module and class information
+module: fortune_system
+class: ZodiacFortuneSystem
+
+# Dependencies
+requires:
+  - datetime
+
+# Configuration
+config:
+  data_dir: data/zodiac
+
+# Input schema
+inputs:
+  birth_date:
+    type: date
+    description: 出生日期 (YYYY-MM-DD)
+    required: true
+  birth_time:
+    type: time
+    description: 出生时间 (HH:MM)
+    required: false
+  birth_place:
+    type: text
+    description: 出生地点
+    required: false
+  question_area:
+    type: select
+    description: 关注领域
+    options: ["爱情", "事业", "健康", "财富", "人际关系", "整体运势"]
+    required: false

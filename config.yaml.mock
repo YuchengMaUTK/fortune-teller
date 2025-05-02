@@ -1,0 +1,31 @@
+# Fortune Teller Mock Configuration
+# Mock 模式配置文件，无需API密钥，仅用于测试系统
+# 复制此文件到 config.yaml 以使用：cp config.yaml.mock config.yaml
+
+app:
+  name: "Fortune Teller"
+  version: "0.1.0"
+  debug: true  # 开启调试模式以查看更多日志
+
+# 使用模拟LLM，无需任何API密钥
+llm:
+  provider: "mock"
+  model: "mock-model"
+  temperature: 0.7
+  max_tokens: 2000
+
+# 插件配置
+plugins:
+  enabled: ["bazi", "tarot", "zodiac"]
+  bazi:
+    data_dir: "data/bazi"
+  tarot:
+    data_dir: "data/tarot"
+  zodiac:
+    data_dir: "data/zodiac"
+
+# 系统设置
+system:
+  language: "zh"  # 中文
+  log_file: "fortune_teller.log"
+  cache: true  # 启用缓存以提高性能

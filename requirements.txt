@@ -1,0 +1,14 @@
+# Fortune Teller - Multi-system Fortune Telling Application
+# Core Dependencies
+pyyaml>=6.0       # For configuration and manifest files
+python-dateutil>=2.8.0  # Advanced date handling
+
+# LLM Integration
+openai>=1.0.0     # For OpenAI API integration
+anthropic>=0.3.0  # For Anthropic API integration
+boto3>=1.28.0     # For AWS Bedrock (Claude) integration
+
+# Utilities
+requests>=2.25.0  # For HTTP requests
+tqdm>=4.62.0      # For progress bars
+colorama>=0.4.4   # For colored terminal output

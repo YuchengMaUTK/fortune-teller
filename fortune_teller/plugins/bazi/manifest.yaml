@@ -1,0 +1,38 @@
+# BaZi (Eight Characters) Fortune Telling System Plugin Manifest
+name: bazi
+display_name: 八字命理
+description: 传统中国八字命理，基于出生年、月、日、时分析命运
+version: 1.0.0
+author: Fortune Teller Team
+
+# Module and class information
+module: fortune_system
+class: BaziFortuneSystem
+
+# Dependencies
+requires:
+  - datetime
+
+# Configuration
+config:
+  data_dir: data/bazi
+
+# Input schema
+inputs:
+  birth_date:
+    type: date
+    description: 出生日期 (YYYY-MM-DD)
+    required: true
+  birth_time:
+    type: time
+    description: 出生时间 (HH:MM)
+    required: false
+  gender:
+    type: select
+    description: 性别
+    options: ["男", "女"]
+    required: true
+  location:
+    type: text
+    description: 出生地点
+    required: false
