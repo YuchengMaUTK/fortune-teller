@@ -396,9 +396,17 @@ def run_interactive_menu(fortune_teller, args):
         args: Parsed command-line arguments
     """
     try:
+        first_run = True  # 添加标志位控制欢迎画面显示
+        
         while True:  # Main loop to allow returning to the main menu
-            # Display welcome screen on each loop
-            print_welcome_screen()
+            # 仅在首次运行时显示欢迎画面
+            if first_run:
+                print_welcome_screen()
+                first_run = False  # 重置标志位
+            else:
+                # 显示简化的标题，而不是完整的欢迎画面
+                print(f"\n{Colors.BOLD}{Colors.YELLOW}✨ 霄占命理系统 ✨{Colors.ENDC}")
+                print(f"{Colors.CYAN}" + "=" * 60 + f"{Colors.ENDC}")
             
             # Show LLM information
             llm_config = fortune_teller.config_manager.get_config("llm")
@@ -721,9 +729,6 @@ def main():
         logging.getLogger().addHandler(console_handler)
     
     try:
-        # Display welcome screen
-        print_welcome_screen()
-        
         # Show initialization message
         print(f"{Colors.CYAN}正在初始化系统...{Colors.ENDC}")
         
