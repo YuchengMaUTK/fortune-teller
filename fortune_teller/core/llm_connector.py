@@ -54,11 +54,18 @@ class LLMConnector:
                 self.client = None
         elif self.provider == "deepseek":
             try:
-                from .deepseek_connector import DeepSeekConnector
-                self.client = DeepSeekConnector(self.config)
+                from openai import OpenAI
+                self.client = OpenAI(api_key=self.api_key, base_url="https://api.deepseek.com")
             except ImportError:
-                logger.error("DeepSeek connector not available")
+                logger.error("OpenAI package not installed. Install with: pip install openai")
                 self.client = None
+
+            # try:
+            #     from .deepseek_connector import DeepSeekConnector
+            #     self.client = DeepSeekConnector(self.config)
+            # except ImportError:
+            #     logger.error("DeepSeek connector not available")
+            #     self.client = None
         elif self.provider == "anthropic":
             try:
                 import anthropic
@@ -113,7 +120,7 @@ class LLMConnector:
                     logger.warning("DeepSeek client not initialized, falling back to mock connector")
                     response = self._mock_response(system_prompt, user_prompt)
                 else:
-                    response = self.client.generate_response(system_prompt, user_prompt)
+                    response = self._call_openai(system_prompt, user_prompt)
             elif self.provider == "anthropic":
                 if self.client is None:
                     logger.warning("Anthropic client not initialized, falling back to mock connector")
@@ -146,6 +153,7 @@ class LLMConnector:
         combined = f"{self.provider}_{self.model}_{system_prompt}_{user_prompt}"
         return str(hash(combined))
 
+
     def _call_openai(self, system_prompt: str, user_prompt: str) -> Tuple[str, Dict[str, Any]]:
         """Call the OpenAI API with the given prompts."""
         if self.client is None:
@@ -157,7 +165,7 @@ class LLMConnector:
                 {"role": "user", "content": user_prompt}
             ]
 
-            response = self.client.ChatCompletion.create(
+            response = self.client.chat.completions.create(
                 model=self.model,
                 messages=messages,
                 temperature=self.temperature,
