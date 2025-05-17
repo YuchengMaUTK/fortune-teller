@@ -99,6 +99,16 @@ class LLMConnector:
         Returns:
             Tuple of (text response, metadata)
         """
+        # Log the prompts for debugging
+        logger.info("--- LLM REQUEST BEGIN ---")
+        logger.info(f"PROVIDER: {self.provider}")
+        logger.info(f"MODEL: {self.model}")
+        logger.info("SYSTEM PROMPT:")
+        logger.info(system_prompt)
+        logger.info("USER PROMPT:")
+        logger.info(user_prompt)
+        logger.info("--- LLM REQUEST END ---")
+        
         # Generate a cache key
         cache_key = self._generate_cache_key(system_prompt, user_prompt)
 

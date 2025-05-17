@@ -93,7 +93,8 @@ class FortuneTeller:
     def perform_reading(
         self, 
         system_name: str, 
-        inputs: Dict[str, Any]
+        inputs: Dict[str, Any],
+        processed_data: Dict[str, Any] = None
     ) -> Dict[str, Any]:
         """
         Perform a fortune telling reading.
@@ -101,6 +102,7 @@ class FortuneTeller:
         Args:
             system_name: Name of the fortune telling system to use
             inputs: User input data for the fortune system
+            processed_data: Optional pre-processed data (to avoid re-processing)
             
         Returns:
             Reading results and metadata
@@ -114,11 +116,16 @@ class FortuneTeller:
             raise ValueError(f"未找到占卜系统: {system_name}")
         
         try:
-            # Validate inputs
-            validated_inputs = fortune_system.validate_input(inputs)
-            
-            # Process the data
-            processed_data = fortune_system.process_data(validated_inputs)
+            # Use provided processed data if available, otherwise process the inputs
+            if processed_data is None:
+                # Validate inputs
+                validated_inputs = fortune_system.validate_input(inputs)
+                
+                # Process the data
+                processed_data = fortune_system.process_data(validated_inputs)
+            else:
+                # If processed_data is provided, we use that directly
+                validated_inputs = inputs
             
             # Save processed data for follow-up questions
             self._last_processed_data = {
@@ -457,6 +464,14 @@ def run_interactive_menu(fortune_teller, args):
                 # Display the processed data using the system-specific display method
                 system.display_processed_data(processed_data)
                 
+                # Store the processed data in the fortune teller's cache to prevent re-drawing cards
+                # This is crucial for tarot readings to ensure consistency between displayed and interpreted cards
+                fortune_teller._last_processed_data = {
+                    "system_name": system.name,
+                    "processed_data": processed_data,
+                    "inputs": validated_inputs
+                }
+                
                 # Confirm to proceed
                 input(f"\n{Colors.CYAN}按回车键继续生成详细解读...{Colors.ENDC}")
                 
@@ -469,8 +484,26 @@ def run_interactive_menu(fortune_teller, args):
             animation.start()
             
             try:
-                # Execute the reading
-                result = fortune_teller.perform_reading(system.name, inputs)
+                # Generate LLM prompts directly from the stored processed data
+                prompts = system.generate_llm_prompt(processed_data)
+                
+                # Get LLM response directly
+                llm_response, metadata = fortune_teller.llm_connector.generate_response(
+                    prompts["system_prompt"],
+                    prompts["user_prompt"]
+                )
+                
+                # Format the result
+                result = system.format_result(llm_response)
+                
+                # Add metadata to the result
+                import datetime
+                result["metadata"] = {
+                    "system_name": system.name,
+                    "timestamp": datetime.datetime.now().isoformat(),
+                    "llm_metadata": metadata,
+                    "inputs": {k: str(v) for k, v in inputs.items()}
+                }
                 
                 # Stop the loading animation
                 animation.stop()

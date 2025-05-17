@@ -290,6 +290,7 @@ class TarotFortuneSystem(BaseFortuneSystem):
             },
             "reading": reading
         }
+        logger.info(f"Processed data: {json.dumps(processed_data, ensure_ascii=False, indent=2)}")
         
         return processed_data
     
@@ -306,6 +307,13 @@ class TarotFortuneSystem(BaseFortuneSystem):
         # Create the system prompt
         system_prompt = f"""你是一位经验丰富的塔罗牌解读大师。
 请根据提供的塔罗牌阵和牌面，为咨询者提供专业、详细且有洞见的解读。
+
+非常重要：请仔细确认提示中列出的实际抽取的牌，并且只解读这些牌。
+- 你的解读必须严格基于用户提示中列出的特定牌，而不是其他任何牌。
+- 在开始解读前，请先在心里确认每个位置抽到的牌名和正逆位。
+- 确保你提到的每一张牌都是用户实际抽取的牌。
+- 不要在解读中引用或暗示任何未在用户提示中明确列出的牌。
+
 你的解读应该：
 1. 对每个牌位和对应的牌面进行解释
 2. 分析牌面之间的关系和相互影响
@@ -419,27 +427,16 @@ class TarotFortuneSystem(BaseFortuneSystem):
         """
         cards_file = os.path.join(self.data_dir, "cards.json")
         
-        # If the file doesn't exist, create it with default data
-        if not os.path.exists(cards_file):
-            # Ensure directory exists
-            os.makedirs(os.path.dirname(cards_file), exist_ok=True)
-            
-            # Create default data
-            default_cards = self._get_default_cards()
-            
-            # Save default data
-            with open(cards_file, "w", encoding="utf-8") as f:
-                json.dump(default_cards, f, ensure_ascii=False, indent=2)
-            
-            return default_cards
-        
         # Load data from file
         try:
             with open(cards_file, "r", encoding="utf-8") as f:
+                logger.info(f"Successfully loaded tarot cards from {cards_file}")
                 return json.load(f)
         except Exception as e:
             logger.error(f"Error loading tarot card data: {e}")
-            return self._get_default_cards()
+            # Instead of using a default hardcoded list, raise an error
+            # This ensures we rely solely on the JSON data file
+            raise ValueError(f"无法加载塔罗牌数据。请确保 {cards_file} 文件存在且格式正确。错误: {e}")
     
     def _draw_cards(self, count: int) -> List[Dict[str, Any]]:
         """
@@ -467,200 +464,3 @@ class TarotFortuneSystem(BaseFortuneSystem):
             available_cards.remove(card)
         
         return drawn
-    
-    def _get_default_cards(self) -> List[Dict[str, Any]]:
-        """
-        Get default tarot card data.
-        
-        Returns:
-            List of default tarot card data dictionaries
-        """
-        # This is a simplified list of major arcana cards only
-        major_arcana = [
-            {
-                "id": 0,
-                "name": "愚者",
-                "arcana": "major",
-                "suit": "major",
-                "description": "代表新的开始、冒险、纯真和自发行为",
-                "keywords": ["新的开始", "冒险", "天真", "自发性"],
-                "emoji": "🃏"
-            },
-            {
-                "id": 1,
-                "name": "魔术师",
-                "arcana": "major",
-                "suit": "major",
-                "description": "代表创造力、技能、意识、操控和潜力",
-                "keywords": ["创造力", "意志力", "技能", "沟通"],
-                "emoji": "🧙‍♂️"
-            },
-            {
-                "id": 2,
-                "name": "女祭司",
-                "arcana": "major",
-                "suit": "major",
-                "description": "代表直觉、灵性、神秘和内心的智慧",
-                "keywords": ["直觉", "潜意识", "神秘", "内在知识"],
-                "emoji": "🔮"
-            },
-            {
-                "id": 3,
-                "name": "皇后",
-                "arcana": "major",
-                "suit": "major",
-                "description": "代表丰饶、母性、创意表达和情感安全",
-                "keywords": ["丰饶", "滋养", "母性", "感性"],
-                "emoji": "👸"
-            },
-            {
-                "id": 4,
-                "name": "皇帝",
-                "arcana": "major",
-                "suit": "major",
-                "description": "代表权威、结构、控制和父亲形象",
-                "keywords": ["权威", "结构", "父亲形象", "控制"],
-                "emoji": "👑"
-            },
-            {
-                "id": 5,
-                "name": "教皇",
-                "arcana": "major",
-                "suit": "major",
-                "description": "代表传统、信仰体系、传承和学习",
-                "keywords": ["传统", "精神指导", "信仰", "教育"],
-                "emoji": "⛪"
-            },
-            {
-                "id": 6,
-                "name": "恋人",
-                "arcana": "major",
-                "suit": "major",
-                "description": "代表爱情、关系、价值观和选择",
-                "keywords": ["爱", "选择", "价值观", "和谐"],
-                "emoji": "❤️"
-            },
-            {
-                "id": 7,
-                "name": "战车",
-                "arcana": "major",
-                "suit": "major",
-                "description": "代表意志力、决心、胜利和自信",
-                "keywords": ["毅力", "决心", "胜利", "自信"],
-                "emoji": "🏇"
-            },
-            {
-                "id": 8,
-                "name": "力量",
-                "arcana": "major",
-                "suit": "major",
-                "description": "代表内在力量、勇气、说服力和耐心",
-                "keywords": ["内在力量", "勇气", "说服力", "耐心"]
-            },
-            {
-                "id": 9,
-                "name": "隐者",
-                "arcana": "major",
-                "suit": "major",
-                "description": "代表寻求内在真相、孤独、内省和指导",
-                "keywords": ["内省", "孤独", "寻求真理", "指导"]
-            },
-            {
-                "id": 10,
-                "name": "命运之轮",
-                "arcana": "major",
-                "suit": "major",
-                "description": "代表转变、命运、周期和机会",
-                "keywords": ["命运", "转变", "周期", "运气"]
-            },
-            {
-                "id": 11,
-                "name": "正义",
-                "arcana": "major",
-                "suit": "major",
-                "description": "代表公平、真相、因果律和平衡",
-                "keywords": ["正义", "公平", "真相", "平衡"]
-            },
-            {
-                "id": 12,
-                "name": "悬吊者",
-                "arcana": "major",
-                "suit": "major",
-                "description": "代表牺牲、暂停、新观点和洞见",
-                "keywords": ["牺牲", "暂停", "新视角", "放弃"]
-            },
-            {
-                "id": 13,
-                "name": "死神",
-                "arcana": "major",
-                "suit": "major",
-                "description": "代表结束、变化、转变和过渡",
-                "keywords": ["结束", "变化", "转变", "重生"]
-            },
-            {
-                "id": 14,
-                "name": "节制",
-                "arcana": "major",
-                "suit": "major",
-                "description": "代表平衡、适度、耐心和目的",
-                "keywords": ["平衡", "适度", "耐心", "和谐"]
-            },
-            {
-                "id": 15,
-                "name": "恶魔",
-                "arcana": "major",
-                "suit": "major",
-                "description": "代表束缚、物质主义、依恋和恐惧",
-                "keywords": ["束缚", "物质主义", "依恋", "恐惧"]
-            },
-            {
-                "id": 16,
-                "name": "塔",
-                "arcana": "major",
-                "suit": "major",
-                "description": "代表突然变化、启示、混乱和觉醒",
-                "keywords": ["突变", "崩塌", "启示", "冲击"]
-            },
-            {
-                "id": 17,
-                "name": "星星",
-                "arcana": "major",
-                "suit": "major",
-                "description": "代表希望、灵感、宁静和慷慨",
-                "keywords": ["希望", "灵感", "宁静", "引导"]
-            },
-            {
-                "id": 18,
-                "name": "月亮",
-                "arcana": "major",
-                "suit": "major",
-                "description": "代表错觉、恐惧、潜意识和直觉",
-                "keywords": ["错觉", "恐惧", "梦境", "直觉"]
-            },
-            {
-                "id": 19,
-                "name": "太阳",
-                "arcana": "major",
-                "suit": "major",
-                "description": "代表快乐、成功、活力和自信",
-                "keywords": ["光明", "成功", "喜悦", "活力"]
-            },
-            {
-                "id": 20,
-                "name": "审判",
-                "arcana": "major",
-                "suit": "major",
-                "description": "代表重生、内心召唤、反省和解放",
-                "keywords": ["觉醒", "重生", "内心召唤", "决定"]
-            },
-            {
-                "id": 21,
-                "name": "世界",
-                "arcana": "major",
-                "suit": "major",
-                "description": "代表完成、整合、成就和旅程",
-                "keywords": ["完成", "成就", "圆满", "整合"]
-            }
-        ]
-        
-        return major_arcana
