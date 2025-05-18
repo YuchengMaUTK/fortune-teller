@@ -27,18 +27,41 @@ class ConfigManager:
         Args:
             config_file: Path to the configuration file. If None, uses the default.
         """
-        # Default config file location
+        # Default config file location - first check in project root, then in the package directory
         if config_file is None:
-            self.config_file = os.path.abspath(
+            # First try in the project root directory (most common case)
+            root_config = os.path.abspath(
+                os.path.join(os.getcwd(), "config.yaml")
+            )
+            
+            # Then fallback to the package directory if the root config doesn't exist
+            package_config = os.path.abspath(
                 os.path.join(os.path.dirname(__file__), "..", "config.yaml")
             )
+            
+            # Use the first one that exists, or default to root
+            if os.path.isfile(root_config):
+                self.config_file = root_config
+                logger.info(f"Using config from project root: {root_config}")
+            elif os.path.isfile(package_config):
+                self.config_file = package_config
+                logger.info(f"Using config from package directory: {package_config}")
+            else:
+                # Default to root even if it doesn't exist yet
+                self.config_file = root_config
+                logger.info(f"No existing config found, will create at: {root_config}")
         else:
             self.config_file = os.path.abspath(config_file)
+            logger.info(f"Using specified config file: {self.config_file}")
         
         # Load or create default configuration
         self.config = self._load_config()
         
         logger.info(f"Configuration manager initialized with config file: {self.config_file}")
+        
+        # Debug log the actual values loaded
+        llm_config = self.get_config("llm")
+        logger.info(f"LLM Provider: {llm_config.get('provider')}, Model: {llm_config.get('model')}")
     
     def _load_config(self) -> Dict[str, Any]:
         """
@@ -64,7 +87,7 @@ class ConfigManager:
                 logger.info(f"Configuration loaded from {self.config_file}")
                 return config or self._get_default_config()
             else:
-                logger.info("No configuration file found, creating default configuration")
+                logger.warning(f"No configuration file found at {self.config_file}, creating default configuration")
                 config = self._get_default_config()
                 self.save_config()
                 return config

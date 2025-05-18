@@ -382,23 +382,33 @@ class TarotFortuneSystem(BaseFortuneSystem):
         section_text = []
         
         for line in llm_response.split('\n'):
-            # Check if line is a section header
+            # Check for various section header patterns
             if line.strip().startswith('##'):
-                # Save previous section
+                # Markdown headers
                 if section_text:
                     sections[current_section] = '\n'.join(section_text).strip()
                     section_text = []
-                
-                # Extract new section name
                 current_section = line.strip('#').strip()
             elif line.strip().startswith('#'):
-                # Save previous section
+                # Single hash headers
                 if section_text:
                     sections[current_section] = '\n'.join(section_text).strip()
                     section_text = []
-                
-                # Extract new section name
                 current_section = line.strip('#').strip()
+            elif line.strip().startswith('【') and '】' in line:
+                # Chinese bracket headers - common in responses
+                if section_text:
+                    sections[current_section] = '\n'.join(section_text).strip()
+                    section_text = []
+                # Extract the text between 【 and 】
+                current_section = line.strip().split('【')[1].split('】')[0].strip()
+                section_text.append(line)  # Include the header line in content
+            elif line.strip() and '----' in line and len(line.strip()) > 10:
+                # Horizontal rule separator often indicates a new section
+                if section_text:
+                    sections[current_section] = '\n'.join(section_text).strip()
+                    section_text = []
+                section_text.append(line)  # Include the separator in the new section
             else:
                 section_text.append(line)
         
@@ -412,10 +422,24 @@ class TarotFortuneSystem(BaseFortuneSystem):
                 "整体解读": llm_response.strip()
             }
         
+        # Process special patterns for consistency
+        processed_sections = {}
+        for title, content in sections.items():
+            # Clean up section titles for consistency
+            clean_title = title.replace("【", "").replace("】", "").strip()
+            
+            # For common titles, use standard names
+            if "整体" in clean_title or "综合" in clean_title:
+                clean_title = "整体解读"
+            elif "各牌位" in clean_title or "牌位" in clean_title:
+                clean_title = "各牌位详细解读"
+                
+            processed_sections[clean_title] = content
+            
         return {
-            "reading": sections,
+            "reading": processed_sections,
             "full_text": llm_response,
-            "format_version": "1.0"
+            "format_version": "1.1"
         }
     
     def _load_cards(self) -> List[Dict[str, Any]]:

@@ -2,7 +2,11 @@
 Display functions for the Fortune Teller command-line application.
 """
 import datetime
-from typing import Dict, Any, List
+import sys
+import logging
+import time
+import re
+from typing import Dict, Any, List, Generator
 
 from fortune_teller.ui.colors import Colors, ELEMENT_COLORS
 from fortune_teller.core import BaseFortuneSystem
@@ -239,6 +243,117 @@ def print_reading_result(result: Dict[str, Any], output_path: str = None):
         print(f"{content}")
         print(f"\n{Colors.CYAN}" + "-" * 40 + f"{Colors.ENDC}\n")
 
+def print_reading_result_streaming(result_generator: Generator[str, None, None], output_path: str = None, start_time: float = None) -> str:
+    """
+    Print the streaming fortune reading result to the console, displaying content as it arrives.
+    
+    Args:
+        result_generator: Generator yielding text chunks of the fortune reading
+        output_path: Path where the result will be saved (optional)
+        start_time: Timestamp when the API call was initiated (for latency measurement)
+        
+    Returns:
+        Complete response text (for potential saving or further processing)
+    """
+    # Setup logger for chunk tracking
+    chunk_logger = logging.getLogger("StreamingChunks")
+    chunk_logger.setLevel(logging.DEBUG)
+    
+    # Ensure we have a file handler for the chunk log
+    if not chunk_logger.handlers:
+        chunk_handler = logging.FileHandler('streaming_chunks.log')
+        chunk_formatter = logging.Formatter('%(asctime)s - %(message)s')
+        chunk_handler.setFormatter(chunk_formatter)
+        chunk_logger.addHandler(chunk_handler)
+    
+    # Log start of streaming
+    chunk_logger.info("=== START OF STREAMING SESSION ===")
+    
+    # Show preparing message
+    print(f"\n{Colors.GREEN}✨ 正在生成解读，请稍候... ✨{Colors.ENDC}\n")
+    
+    # Display the result header
+    print(f"{Colors.CYAN}" + "=" * 60 + f"{Colors.ENDC}\n")
+    
+    # Collect the complete response while printing chunks
+    complete_response = ""
+    chunk_count = 0
+    json_start_pattern = re.compile(r'^\s*\{')
+    json_mode_detected = False
+    
+    # For measuring first chunk latency
+    first_chunk_time = None
+    
+    try:
+        for chunk in result_generator:
+            # Record time of first non-empty chunk
+            if chunk_count == 0 and start_time:
+                first_chunk_time = time.time()
+                latency = first_chunk_time - start_time
+                chunk_logger.info(f"⏱️ 首个块延迟: {latency:.3f}秒")
+                print(f"{Colors.CYAN}⏱️ 响应延迟: {latency:.3f}秒{Colors.ENDC}")
+            
+            chunk_count += 1
+            
+            # Skip empty chunks
+            if not chunk or chunk.strip() == "":
+                continue
+                
+            # Log each chunk with details
+            chunk_repr = repr(chunk)
+            chunk_logger.info(f"Chunk #{chunk_count} received | Length: {len(chunk)} | Content: {chunk_repr}")
+            
+            # Try to detect if we're receiving raw JSON and handle it appropriately
+            if chunk_count <= 2 and json_start_pattern.match(chunk):
+                json_mode_detected = True
+                chunk_logger.warning("Detected JSON format in streaming output - will filter")
+                # Don't print raw JSON to console
+                complete_response += chunk
+                continue
+                
+            # Skip chunks that look like JSON objects/fragments in JSON mode
+            if json_mode_detected and (chunk.startswith('{') or chunk.startswith('"type":')):
+                chunk_logger.info(f"Skipping JSON fragment: {chunk[:30]}...")
+                complete_response += chunk
+                continue
+            
+            # Strip any JSON formatting from text chunks
+            clean_chunk = chunk
+            
+            # Print chunk and force flush to show immediately
+            sys.stdout.write(clean_chunk)
+            sys.stdout.flush()  # Flush buffer
+            
+            # Add to complete response
+            complete_response += clean_chunk
+            
+            # Add delay to ensure terminal has time to update and create a smoother reading experience
+            # This is especially important for terminals that may buffer output
+            time.sleep(0.05)  # Increased from 0.01 for smoother output
+            
+            # Every few chunks, add a dummy flush/write to force update
+            if chunk_count % 5 == 0:
+                sys.stdout.write("")  # Write empty string to force update
+                sys.stdout.flush()    # Additional flush
+    except KeyboardInterrupt:
+        # Handle user interruption
+        print(f"\n\n{Colors.RED}解读生成已被中断{Colors.ENDC}")
+    except Exception as e:
+        # Handle errors
+        print(f"\n\n{Colors.RED}解读生成出错: {e}{Colors.ENDC}")
+    
+    # Print footer
+    print(f"\n\n{Colors.CYAN}" + "=" * 60 + f"{Colors.ENDC}")
+    
+    # Show success message
+    print(f"\n{Colors.GREEN}✓ 解读生成完成！{Colors.ENDC}")
+    
+    # Show output path if provided
+    if output_path:
+        print(f"{Colors.GREEN}✓ 结果已保存到:{Colors.ENDC} {output_path}")
+    
+    return complete_response
+
 
 def print_followup_result(topic: str, content: str):
     """
@@ -253,6 +368,69 @@ def print_followup_result(topic: str, content: str):
     
     print(content)
     print(f"\n{Colors.CYAN}" + "-" * 40 + f"{Colors.ENDC}\n")
+
+
+def print_followup_result_streaming(topic: str, result_generator: Generator[str, None, None]) -> str:
+    """
+    Print the streaming followup reading result to the console.
+    
+    Args:
+        topic: The topic of the followup reading
+        result_generator: Generator yielding text chunks of the reading
+        
+    Returns:
+        Complete response text
+    """
+    # Setup logger for chunk tracking
+    chunk_logger = logging.getLogger("StreamingChunks")
+    chunk_logger.setLevel(logging.DEBUG)
+    
+    # Ensure we have a file handler for the chunk log
+    if not chunk_logger.handlers:
+        chunk_handler = logging.FileHandler('streaming_chunks.log')
+        chunk_formatter = logging.Formatter('%(asctime)s - %(message)s')
+        chunk_handler.setFormatter(chunk_formatter)
+        chunk_logger.addHandler(chunk_handler)
+    
+    # Log start of streaming
+    chunk_logger.info(f"=== START OF STREAMING SESSION FOR TOPIC: {topic} ===")
+    
+    # Display header
+    print(f"\n{Colors.BOLD}{Colors.YELLOW}✨ {topic}详解 ✨{Colors.ENDC}")
+    print(f"{Colors.CYAN}" + "=" * 60 + f"{Colors.ENDC}\n")
+    
+    # Collect complete response while printing chunks
+    complete_response = ""
+    chunk_count = 0
+    
+    try:
+        for chunk in result_generator:
+            chunk_count += 1
+            
+            # Log each chunk with details
+            chunk_repr = repr(chunk)
+            chunk_logger.info(f"Topic '{topic}' Chunk #{chunk_count} | Length: {len(chunk)} | Content: {chunk_repr}")
+            
+            # Print chunk without newline and flush to show immediately
+            sys.stdout.write(chunk)
+            sys.stdout.flush()
+            
+            # Add to complete response
+            complete_response += chunk
+            
+            # Add delay to ensure terminal has time to update and create a smoother reading experience
+            time.sleep(0.05)  # Added delay for smoother output
+    except KeyboardInterrupt:
+        # Handle user interruption
+        print(f"\n\n{Colors.RED}解读生成已被中断{Colors.ENDC}")
+    except Exception as e:
+        # Handle errors
+        print(f"\n\n{Colors.RED}解读生成出错: {e}{Colors.ENDC}")
+    
+    # Print footer
+    print(f"\n\n{Colors.CYAN}" + "-" * 40 + f"{Colors.ENDC}")
+    
+    return complete_response
 
 
 def display_topic_menu(valid_topics: List[str]) -> None:

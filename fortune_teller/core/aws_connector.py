@@ -5,7 +5,9 @@ import os
 import json
 import logging
 import boto3
-from typing import Dict, Any, Tuple
+import time
+import re
+from typing import Dict, Any, Tuple, Generator
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, 
@@ -45,17 +47,56 @@ class AWSBedrockConnector:
     def _initialize_client(self):
         """Initialize the boto3 client for AWS Bedrock."""
         try:
-            session = boto3.Session(
-                aws_access_key_id=self.aws_access_key,
-                aws_secret_access_key=self.aws_secret_key,
-                aws_session_token=self.aws_session_token,
-                region_name=self.region
-            )
+            # Log the initialization attempt with more details
+            logger.info(f"Initializing AWS Bedrock client with region: {self.region}")
             
+            # Create boto3 session
+            session_args = {
+                'region_name': self.region
+            }
+            
+            # Only add credentials if they are provided
+            if self.aws_access_key:
+                logger.debug("Using provided AWS access key")
+                session_args['aws_access_key_id'] = self.aws_access_key
+            
+            if self.aws_secret_key:
+                logger.debug("Using provided AWS secret key")
+                session_args['aws_secret_access_key'] = self.aws_secret_key
+                
+            if self.aws_session_token:
+                logger.debug("Using provided AWS session token")
+                session_args['aws_session_token'] = self.aws_session_token
+                
+            # Create the session
+            session = boto3.Session(**session_args)
+            
+            # Get credentials used by the session for debugging
+            creds = session.get_credentials()
+            if creds:
+                logger.debug(f"Session created with credentials from: {creds.method}")
+            else:
+                logger.warning("Session created but no credentials were found")
+            
+            # Create the bedrock-runtime client
             self.client = session.client('bedrock-runtime')
-            logger.info("AWS Bedrock client initialized successfully")
+            
+            # Verify the client by making a simple API call
+            try:
+                self.client.list_model_customization_jobs(maxResults=1)
+                logger.info("AWS Bedrock client verified and ready to use")
+            except Exception as verify_error:
+                # This is expected to fail with access denied if the user doesn't have permission,
+                # but it proves the client can make API calls
+                if "AccessDenied" in str(verify_error):
+                    logger.info("Client initialized (limited permissions detected)")
+                else:
+                    logger.warning(f"Client initialized but verification failed: {verify_error}")
+                    
         except Exception as e:
             logger.error(f"Failed to initialize AWS Bedrock client: {e}")
+            import traceback
+            logger.debug(f"AWS client initialization traceback: {traceback.format_exc()}")
             self.client = None
     
     def generate_response(self, 
@@ -254,3 +295,192 @@ class AWSBedrockConnector:
         # Re-initialize the client with new region
         self._initialize_client()
         logger.info(f"AWS region changed to {region}")
+        
+    def generate_response_streaming(self, 
+                                   system_prompt: str, 
+                                   user_prompt: str) -> Generator[str, None, None]:
+        """
+        Generate a streaming response from AWS Bedrock.
+        
+        Args:
+            system_prompt: System prompt for the LLM
+            user_prompt: User prompt for the LLM
+            
+        Returns:
+            Generator yielding text chunks as they become available
+        """
+        # Log the prompts for AWS Bedrock debugging
+        logger.info("--- AWS BEDROCK STREAMING REQUEST BEGIN ---")
+        logger.info(f"MODEL: {self.model}")
+        logger.info(f"REGION: {self.region}")
+        logger.info("SYSTEM PROMPT:")
+        logger.info(system_prompt)
+        logger.info("USER PROMPT:")
+        logger.info(user_prompt)
+        logger.info("--- AWS BEDROCK STREAMING REQUEST END ---")
+        
+        if self.client is None:
+            yield "Error: AWS Bedrock client not initialized"
+            return
+        
+        try:
+            # Format the request body for Claude model on AWS Bedrock
+            # Check if we're using Claude 3.7
+            is_claude_3_7 = "claude-3-7" in self.model.lower()
+            
+            if is_claude_3_7:
+                # Special format for Claude 3.7
+                request_body = {
+                    "anthropic_version": "bedrock-2023-05-31",
+                    "max_tokens": self.max_tokens,
+                    "top_k": 250,
+                    "stop_sequences": [],
+                    "temperature": self.temperature,
+                    "top_p": 0.999,
+                    "messages": [
+                        {
+                            "role": "user",
+                            "content": [
+                                {
+                                    "type": "text",
+                                    "text": user_prompt
+                                }
+                            ]
+                        }
+                    ]
+                }
+                
+                # Add system prompt if provided
+                if system_prompt:
+                    request_body["system"] = system_prompt
+            else:
+                # Standard format for other Claude models
+                request_body = {
+                    "anthropic_version": "bedrock-2023-05-31",
+                    "max_tokens": self.max_tokens,
+                    "temperature": self.temperature,
+                    "messages": [
+                        {
+                            "role": "user",
+                            "content": user_prompt
+                        }
+                    ],
+                    "system": system_prompt  # For AWS Bedrock, system prompt is a separate field
+                }
+            
+            # Determine if this is a model ID or inference profile ARN
+            if self.model.startswith("arn:"):
+                # Use inference profile ARN with streaming
+                try:
+                    logger.debug(f"Attempting streaming with inference profile ARN: {self.model}")
+                    logger.debug(f"Request body: {json.dumps(request_body, indent=2)}")
+                    
+                    try:
+                        response_stream = self.client.invoke_model_with_response_stream(
+                            modelId=self.model,
+                            body=json.dumps(request_body),
+                            contentType="application/json",
+                            accept="application/json"
+                        )
+                        logger.debug("Successfully initiated streaming response")
+                    except Exception as e:
+                        logger.error(f"Error initiating streaming: {str(e)}")
+                        if "not supported" in str(e).lower() or "unsupported" in str(e).lower():
+                            logger.warning("This inference profile may not support streaming. Falling back to non-streaming method.")
+                            yield "【提示：此推理配置文件不支持流式输出，已退化为模拟流式】\n\n"
+                            
+                            # Fall back to non-streaming method and simulate streaming
+                            text_response, _ = self.generate_response(system_prompt, user_prompt)
+                            sentences = re.split(r'([.!?。！？]+\s*)', text_response)
+                            for i in range(0, len(sentences), 2):
+                                if i < len(sentences):
+                                    chunk = sentences[i]
+                                    if i+1 < len(sentences):
+                                        chunk += sentences[i+1]
+                                    if chunk.strip():
+                                        yield chunk
+                                        time.sleep(0.05)
+                            return
+                        else:
+                            # Re-raise if it's a different error
+                            raise
+                    
+                    # Process the streaming response
+                    logger.debug("Processing streaming response events")
+                    event_count = 0
+                    for event in response_stream.get("body", []):
+                        event_count += 1
+                        if "chunk" in event:
+                            try:
+                                raw_bytes = event["chunk"]["bytes"]
+                                logger.debug(f"Received chunk {event_count}: {raw_bytes[:100]}...")
+                                chunk_data = json.loads(raw_bytes)
+                                
+                                # Handle Claude 3.7+ JSON streaming format
+                                if "type" in chunk_data:
+                                    # This is the newer JSON streaming format
+                                    if chunk_data["type"] == "content_block_delta":
+                                        if "delta" in chunk_data and "text" in chunk_data["delta"]:
+                                            yield chunk_data["delta"]["text"]
+                                    # Skip other message types like message_start, content_block_start, etc.
+                                    continue
+                                
+                                # Handle older response formats
+                                if "completion" in chunk_data:
+                                    # Claude 1/2 style
+                                    yield chunk_data["completion"]
+                                elif "content" in chunk_data:
+                                    if isinstance(chunk_data["content"], list):
+                                        # Claude 3 style with content list
+                                        for content_item in chunk_data["content"]:
+                                            if isinstance(content_item, dict) and content_item.get("type") == "text":
+                                                yield content_item["text"]
+                                            elif isinstance(content_item, str):
+                                                yield content_item
+                                    elif isinstance(chunk_data["content"], str):
+                                        # Some formats might have direct string content
+                                        yield chunk_data["content"]
+                                    elif isinstance(chunk_data["content"], dict) and "text" in chunk_data["content"]:
+                                        # Yet another possible format
+                                        yield chunk_data["content"]["text"]
+                                else:
+                                    # Log the unknown format but don't yield it to avoid showing JSON to users
+                                    logger.warning(f"Unknown chunk format: {json.dumps(chunk_data)[:200]}")
+                            except json.JSONDecodeError:
+                                logger.warning(f"Failed to parse chunk as JSON: {event['chunk']['bytes'][:200]}")
+                                # Don't yield raw bytes to avoid showing gibberish to users
+                except Exception as e:
+                    error_msg = f"Error during AWS Bedrock streaming: {str(e)}"
+                    logger.error(error_msg)
+                    yield f"\n{error_msg}"
+            else:
+                
+                # Try to use non-streaming API and simulate streaming
+                try:
+                    # Get complete response
+                    text_response, _ = self.generate_response(system_prompt, user_prompt)
+                    
+                    # Simulate streaming by yielding chunks of the response
+                    import re
+                    # Split by sentences for Chinese and English
+                    sentences = re.split(r'([.!?。！？]+\s*)', text_response)
+                    
+                    # Yield each sentence (with its punctuation if available)
+                    for i in range(0, len(sentences), 2):
+                        if i < len(sentences):
+                            chunk = sentences[i]
+                            if i+1 < len(sentences):  # Add punctuation if available
+                                chunk += sentences[i+1]
+                            if chunk.strip():  # Only yield non-empty chunks
+                                yield chunk
+                                # Small delay to simulate streaming
+                                import time
+                                time.sleep(0.05)
+                except Exception as e:
+                    error_msg = f"Error during simulated streaming: {str(e)}"
+                    logger.error(error_msg)
+                    yield f"\n{error_msg}"
+        except Exception as e:
+            error_msg = f"AWS Bedrock streaming API error: {str(e)}"
+            logger.error(error_msg)
+            yield f"\nError during streaming: {str(e)}"

@@ -10,6 +10,8 @@ import argparse
 import logging
 import json
 import traceback
+import time
+import datetime
 from typing import Dict, Any, List, Optional
 
 # 静默所有第三方库的日志，将它们仅输出到文件
@@ -40,7 +42,9 @@ from fortune_teller.ui.colors import Colors
 from fortune_teller.ui.display import (
     print_welcome_screen, print_llm_info, print_available_systems,
     get_user_inputs, display_eight_characters,
-    print_reading_result, print_followup_result, display_topic_menu
+    print_reading_result, print_reading_result_streaming,
+    print_followup_result, display_topic_menu,
+    print_followup_result_streaming
 )
 from fortune_teller.ui.animation import LoadingAnimation
 
@@ -147,7 +151,6 @@ class FortuneTeller:
             result = fortune_system.format_result(llm_response)
             
             # Add metadata to the result
-            import datetime
             result["metadata"] = {
                 "system_name": system_name,
                 "timestamp": datetime.datetime.now().isoformat(),
@@ -343,7 +346,6 @@ class FortuneTeller:
             )
             
             # Format the result for the follow-up
-            import datetime
             result = {
                 "analysis": {
                     topic.replace("🧠 ", "").replace("💼 ", "").replace("❤️ ", "").replace("🧘 ", "").replace("🔄 ", "")
@@ -380,7 +382,6 @@ class FortuneTeller:
         if not filename:
             # Generate a filename based on the system and timestamp
             system = reading["metadata"]["system_name"]
-            import datetime
             timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
             filename = f"reading_{system}_{timestamp}.json"
         
@@ -414,10 +415,7 @@ def run_interactive_menu(fortune_teller, args):
                 # 显示简化的标题，而不是完整的欢迎画面
                 print(f"\n{Colors.BOLD}{Colors.YELLOW}✨ 霄占命理系统 ✨{Colors.ENDC}")
                 print(f"{Colors.CYAN}" + "=" * 60 + f"{Colors.ENDC}")
-            
-            # Show LLM information
-            llm_config = fortune_teller.config_manager.get_config("llm")
-            print_llm_info(llm_config)
+        
             
             # Get available systems
             available_systems = fortune_teller.get_available_systems()
@@ -479,42 +477,73 @@ def run_interactive_menu(fortune_teller, args):
                 print(f"{Colors.RED}处理数据时出错: {str(e)}{Colors.ENDC}")
                 continue  # Return to the main menu instead of exiting
             
-            # Show loading animation for reading generation
+            # Generate LLM prompts from the stored processed data
+            prompts = system.generate_llm_prompt(processed_data)
+            
+            # Save the result if output specified
+            output_path = None
+            if args.output:
+                # Create empty result structure to be populated
+                empty_result = {
+                    "metadata": {
+                        "system_name": system.name,
+                        "timestamp": datetime.datetime.now().isoformat(),
+                        "inputs": {k: str(v) for k, v in inputs.items()}
+                    }
+                }
+                output_path = fortune_teller.save_reading(empty_result, args.output)
+            
+            # Show loading animation for non-streaming mode
             animation = LoadingAnimation("正在连接大语言模型，解析命理")
             animation.start()
-            
+
             try:
-                # Generate LLM prompts directly from the stored processed data
-                prompts = system.generate_llm_prompt(processed_data)
+                # Define handlers for streaming and non-streaming responses
+                def handle_streaming(response_generator, start_time):
+                    """流式输出处理函数"""
+                    nonlocal animation
+                    # Stop animation before streaming output begins
+                    animation.stop()
+                    
+                    return print_reading_result_streaming(
+                        response_generator, 
+                        output_path,
+                        start_time=start_time
+                    )
                 
-                # Get LLM response directly
-                llm_response, metadata = fortune_teller.llm_connector.generate_response(
+                def handle_standard(response, metadata):
+                    """标准输出处理函数"""
+                    nonlocal animation, system
+                    # Format the result
+                    result = system.format_result(response)
+                    
+                    # Add metadata to the result
+                    result["metadata"] = {
+                        "system_name": system.name,
+                        "timestamp": datetime.datetime.now().isoformat(),
+                        "llm_metadata": metadata,
+                        "inputs": {k: str(v) for k, v in inputs.items()}
+                    }
+                    
+                    # Stop the loading animation
+                    animation.stop()
+                    
+                    # Save the result if output specified
+                    nonlocal output_path
+                    if args.output:
+                        output_path = fortune_teller.save_reading(result, args.output)
+                    
+                    # Display the result using standard method
+                    print_reading_result(result, output_path)
+                    return response
+                
+                # Use unified API for response generation
+                complete_response = fortune_teller.llm_connector.generate_best_response(
                     prompts["system_prompt"],
-                    prompts["user_prompt"]
+                    prompts["user_prompt"],
+                    streaming_handler=handle_streaming,
+                    non_streaming_handler=handle_standard
                 )
-                
-                # Format the result
-                result = system.format_result(llm_response)
-                
-                # Add metadata to the result
-                import datetime
-                result["metadata"] = {
-                    "system_name": system.name,
-                    "timestamp": datetime.datetime.now().isoformat(),
-                    "llm_metadata": metadata,
-                    "inputs": {k: str(v) for k, v in inputs.items()}
-                }
-                
-                # Stop the loading animation
-                animation.stop()
-                
-                # Save the result if output specified
-                output_path = None
-                if args.output:
-                    output_path = fortune_teller.save_reading(result, args.output)
-                
-                # Display the result
-                print_reading_result(result, output_path)
                 
                 # Interactive followup menu
                 if not run_followup_menu(fortune_teller):
@@ -632,22 +661,89 @@ def run_chat_mode(fortune_teller, system_name=None):
 
 请以霄占命理师的身份回应。记得保持幽默风趣，并控制回复在200字以内。"""
             
-            # Show loading animation
-            animation = LoadingAnimation("霄占命理师正在沉思")
-            animation.start()
-            
+                
             try:
-                # Get response from LLM
-                response, _ = fortune_teller.llm_connector.generate_response(system_prompt, chat_prompt)
+                # 定义聊天的处理函数
+                def handle_chat_streaming(response_generator, start_time, thinking_anim):
+                    """聊天流式输出处理函数"""
+                    nonlocal animation, chat_context
+                    # Stop main animation (the loading one)
+                    animation.stop()
+                    
+                    # 显示流式结果并测量首个块延迟
+                    complete_response = ""
+                    chunk_count = 0
+                    first_chunk_time = None
+                    
+                    for chunk in response_generator:
+                        # 记录首个块时间
+                        if chunk_count == 0:
+                            # 停止思考动画，它会自动显示霄占: 前缀
+                            thinking_anim.stop()
+                            
+                            first_chunk_time = time.time()
+                            latency = first_chunk_time - start_time
+                            logger.info(f"聊天首个块延迟: {latency:.3f}秒")
+                        
+                        # 跳过空块
+                        if not chunk or chunk.strip() == "":
+                            continue
+                            
+                        chunk_count += 1
+                        
+                        # 打印块并刷新
+                        sys.stdout.write(chunk)
+                        sys.stdout.flush()
+                        
+                        # 添加到完整响应
+                        complete_response += chunk
+                        
+                        # 适当延迟以确保更流畅的阅读体验
+                        time.sleep(0.05)  # 从0.01增加到0.05，使输出更平滑
+                    
+                    # 流式响应后添加换行
+                    print("\n")
+                    return complete_response
                 
-                # Add to chat context
-                chat_context.append(f"霄占: {response.strip()}")
+                def handle_chat_standard(response, metadata, thinking_anim):
+                    """聊天标准输出处理函数"""
+                    nonlocal animation
+                    # 停止所有动画
+                    animation.stop()
+                    thinking_anim.stop()
+                    
+                    # 显示响应 (思考动画停止后会自动显示霄占: 前缀)
+                    print(f"{response.strip()}\n")
+                    return response
                 
-                # Stop animation
+                # 在调用前导入并初始化思考动画
+                from fortune_teller.ui.thinking_animation import ChatThinkingAnimation
+                
+                # 先完全停止主动画，确保它不再显示任何内容
                 animation.stop()
                 
-                # Display the response
-                print(f"\n{Colors.GREEN}霄占: {Colors.ENDC}{response.strip()}\n")
+                # 清除现有输出行，确保没有残留动画文本
+                sys.stdout.write("\r" + " " * 60 + "\r") 
+                sys.stdout.flush()
+                
+                # 等待一小段时间确保主动画完全停止
+                time.sleep(0.1)
+                
+                # 显示即时反馈（在API调用前）
+                thinking_animation = ChatThinkingAnimation(prefix="")
+                print(f"\n{Colors.GREEN}霄占: {Colors.ENDC}", end="", flush=True)
+                thinking_animation.start()
+                
+                # 使用统一的API生成响应
+                response = fortune_teller.llm_connector.generate_best_response(
+                    system_prompt, 
+                    chat_prompt,
+                    streaming_handler=lambda gen, st: handle_chat_streaming(gen, st, thinking_animation),
+                    non_streaming_handler=lambda resp, meta: handle_chat_standard(resp, meta, thinking_animation)
+                )
+                
+                # 将响应添加到聊天上下文
+                chat_context.append(f"霄占: {response.strip()}")
                 
             except Exception as e:
                 animation.stop()
@@ -670,33 +766,38 @@ def run_followup_menu(fortune_teller):
     Returns:
         True if user wants to return to main menu, False to exit
     """
-    # Determine which system is being used
-    if not fortune_teller._last_processed_data:
-        # Fallback to generic topics if no previous reading
-        valid_topics = ["性格特点", "事业财运", "感情姻缘", "健康提示", "大运流年", "与霄占聊天"]
-    else:
-        system_name = fortune_teller._last_processed_data["system_name"]
-        
-        if system_name == "bazi":
-            valid_topics = [
-                "🧠 性格命格", "💼 事业财运", "❤️ 婚姻情感", 
-                "🧘 健康寿元", "🔄 流年大运", "💬 与霄占聊天"
-            ]
-        elif system_name == "tarot":
-            valid_topics = [
-                "🌟 核心启示", "🚶 当前处境", "🧭 阻碍与助力", 
-                "🛤️ 潜在路径", "💫 精神成长", "💬 与霄占聊天"
-            ]
-        elif system_name == "zodiac":
-            valid_topics = [
-                "🪐 星盘解析", "🌠 宫位能量", "🔄 当前行运", 
-                "🌈 元素平衡", "✨ 星座年运", "💬 与霄占聊天"
-            ]
-        else:
-            # Fallback to generic topics
-            valid_topics = ["性格特点", "事业财运", "感情姻缘", "健康提示", "大运流年", "与霄占聊天"]
-    
     while True:
+        # Move topic generation inside loop to regenerate each time
+        # Determine which system is being used
+        if not fortune_teller._last_processed_data:
+            # Fallback to generic topics if no previous reading
+            valid_topics = ["性格特点", "事业财运", "感情姻缘", "健康提示", "大运流年", "与霄占聊天"]
+        else:
+            system_name = fortune_teller._last_processed_data["system_name"]
+            
+            if system_name == "bazi":
+                valid_topics = [
+                    "🧠 性格命格", "💼 事业财运", "❤️ 婚姻情感", 
+                    "🧘 健康寿元", "🔄 流年大运"
+                ]
+            elif system_name == "tarot":
+                valid_topics = [
+                    "🌟 核心启示", "🚶 当前处境", "🧭 阻碍与助力", 
+                    "🛤️ 潜在路径", "💫 精神成长"
+                ]
+            elif system_name == "zodiac":
+                valid_topics = [
+                    "🪐 星盘解析", "🌠 宫位能量", "🔄 当前行运", 
+                    "🌈 元素平衡", "✨ 星座年运"
+                ]
+            else:
+                # Fallback to generic topics
+                valid_topics = ["性格特点", "事业财运", "感情姻缘", "健康提示", "大运流年"]
+                
+            # Always add chat option regardless of the system
+            valid_topics.append("💬 与霄占聊天")
+        
+        # Display menu with freshly generated topics list
         display_topic_menu(valid_topics)
         
         try:
@@ -718,15 +819,220 @@ def run_followup_menu(fortune_teller):
                 animation.start()
                 
                 try:
-                    # Get the specific topic reading
-                    followup_result = fortune_teller.perform_followup_reading(selected_topic)
+                    # This is where we'll replace direct method call with streaming approach
+                    # First, create system and user prompts
+                    system_name = fortune_teller._last_processed_data["system_name"]
+                    processed_data = fortune_teller._last_processed_data["processed_data"]
                     
-                    # Stop animation
+                    # Get clean topic name (remove emoji if present)
+                    clean_topic = selected_topic
+                    if any(emoji in selected_topic for emoji in ["🧠", "💼", "❤️", "🧘", "🔄", "🌟", "🚶", "🧭", "🛤️", "💫", "🪐", "🌠", "🌈", "✨", "💬"]):
+                        clean_topic = selected_topic[2:].strip()  # Remove emoji and whitespace
+                    
+                    # Define system-specific topics and prompts
+                    if system_name == "bazi":
+                        valid_topics = {
+                            "🧠 性格命格": "请详细分析此八字主人的性格特点、才能倾向和行为模式，使用生动有趣的比喻和例子。",
+                            "💼 事业财运": "请详细分析此八字主人的事业发展、适合行业和财富机遇，用风趣幽默的方式给出具体建议。", 
+                            "❤️ 婚姻情感": "请详细分析此八字主人的感情状况、婚姻倾向和桃花运势，以诙谐但不油腻的方式提供见解。",
+                            "🧘 健康寿元": "请详细分析此八字主人的健康状况、潜在问题和养生建议，用轻松方式点出需要注意的地方。",
+                            "🔄 流年大运": "请详细分析此八字主人近期和未来的运势变化、关键时间点，神秘而又不失风趣地展望未来。"
+                        }
+                    elif system_name == "tarot":
+                        valid_topics = {
+                            "🌟 核心启示": "请详细分析此塔罗牌阵的核心信息和主要启示，用深入而通俗的语言揭示关键洞见。",
+                            "🚶 当前处境": "请详细分析求测者目前所处的状况、面临的环境和心理状态，用生动的比喻帮助理解。", 
+                            "🧭 阻碍与助力": "请详细分析求测者当前面临的挑战和可利用的资源，提供创造性的思路和实用建议。",
+                            "🛤️ 潜在路径": "请详细分析求测者可能的发展方向和选择建议，以温和但明确的方式指出各种可能性。",
+                            "💫 精神成长": "请详细分析求测者的内在成长和个人转变的机会，用启发性的方式鼓励自我探索。"
+                        }
+                    elif system_name == "zodiac":
+                        valid_topics = {
+                            "🪐 星盘解析": "请详细分析这份星盘的整体特点、行星角度及主要影响，用清晰易懂的方式解释复杂的星象关系。",
+                            "🌠 宫位能量": "请详细分析星盘中重要宫位的能量分布和影响，特别关注上升、中天、下降和天底宫。", 
+                            "🔄 当前行运": "请详细分析当前行星运行对求测者的影响，指出关键的行星相位和过境现象。",
+                            "🌈 元素平衡": "请详细分析星盘中的元素与能量分布，说明火、土、风、水四元素的平衡状态与缺失情况。",
+                            "✨ 星座年运": "请详细预测未来一年内的星象变化及其对求测者的影响，用鼓舞人心的方式展望未来机遇。"
+                        }
+                    else:
+                        # Default topics for any other system or fallback
+                        valid_topics = {
+                            "性格特点": "请详细分析此命盘主人的性格特点、才能倾向和行为模式，使用生动有趣的比喻和例子。",
+                            "事业财运": "请详细分析此命盘主人的事业发展、适合行业和财富机遇，用风趣幽默的方式给出具体建议。", 
+                            "感情姻缘": "请详细分析此命盘主人的感情状况、婚姻倾向和桃花运势，以诙谐但不油腻的方式提供见解。",
+                            "健康提示": "请详细分析此命盘主人的健康状况、潜在问题和养生建议，用轻松方式点出需要注意的地方。",
+                            "大运流年": "请详细分析此命盘主人近期和未来的运势变化、关键时间点，神秘而又不失风趣地展望未来。"
+                        }
+                    
+                    # Make sure the selected topic is in our topics dictionary to avoid KeyError
+                    topic_description = ""
+                    try:
+                        topic_description = valid_topics.get(selected_topic, "")
+                        logger.info(f"找到话题'{selected_topic}'的描述: {topic_description}")
+                    except Exception as e:
+                        logger.error(f"获取话题描述时出错: {e}", exc_info=True)
+                        # Provide a generic description if we can't find one
+                        topic_description = f"请详细分析{clean_topic}方面的信息，用清晰易懂的语言提供有见解的解读。"
+                        
+                    # Create system prompts for different fortune systems
+                    if system_name == "bazi":
+                        system_prompt = f"""你是"霄占"，一位来自中国的八字命理学大师，已有30年的占卜经验，性格风趣幽默又不失智慧。
+你刚刚为求测者提供了基本的八字命理分析。现在，求测者想了解更多关于"{clean_topic}"的详细信息。
+
+请为求测者提供关于"{clean_topic}"的深入详尽的解读。{topic_description}
+
+请确保你的回答既专业又风趣，像一位和蔼可亲的长辈聊天，而不是冷冰冰的说教。让求测者感到轻松愉快，同时获得有价值的人生启示。
+
+你的分析应既有专业水准，又富含情趣价值，可以巧妙地引用一些谚语、典故或生活小故事来帮助理解。
+"""
+                    elif system_name == "tarot":
+                        system_prompt = f"""你是"霄占"，一位精通塔罗牌解读的大师，拥有深厚的神秘学知识和20年的塔罗牌解读经验。
+你刚刚为求测者提供了基本的塔罗牌阵解析。现在，求测者想了解更多关于"{clean_topic}"的详细信息。
+
+请为求测者提供关于"{clean_topic}"的深入详尽的解读。{valid_topics[selected_topic]}
+
+你的风格睿智而神秘，充满着智慧与洞察力，但同时也很亲和，能用生动的语言将复杂的符号象征转化为直观的理解。
+
+你的解读应当既有专业深度，又有灵性启发，可以适当引用一些神话、传说或象征学知识来丰富分析。
+"""
+                    elif system_name == "zodiac":
+                        system_prompt = f"""你是"霄占"，一位精通西方占星学的专家，有着丰富的占星咨询经验。
+你刚刚为求测者提供了基本的星盘分析。现在，求测者想了解更多关于"{clean_topic}"的详细信息。
+
+请为求测者提供关于"{clean_topic}"的深入详尽的解读。{valid_topics[selected_topic]}
+
+你的风格既有专业深度，又不乏幽默感，能够用生动的比喻和实例解释复杂的星象。你既尊重占星学的传统知识，
+又不会完全决定论，而是强调每个人都有自由意志来选择如何应对星象影响。
+
+你的解读应当平衡、客观，避免过于绝对化的预测。提供实用的建议和观点，帮助咨询者更好地理解自己和当前的能量影响。
+"""
+                    else:
+                        # Default generic prompt
+                        system_prompt = f"""你是"霄占"，一位来自中国的命理学大师，已有30年的占卜经验，性格风趣幽默又不失智慧。
+你刚刚为求测者提供了基本的命理分析。现在，求测者想了解更多关于"{clean_topic}"的详细信息。
+
+请为求测者提供关于"{clean_topic}"的深入详尽的解读。{valid_topics[selected_topic]}
+
+请确保你的回答既专业又风趣，像一位和蔼可亲的长辈聊天，而不是冷冰冰的说教。让求测者感到轻松愉快，同时获得有价值的人生启示。
+
+你的分析应既有专业水准，又富含情趣价值，可以巧妙地引用一些谚语、典故或生活小故事来帮助理解。
+"""
+                    
+                    # Create user prompts based on system type
+                    if system_name == "bazi":
+                        user_prompt = f"""基于刚才的八字分析，请详细解读"{clean_topic}"方面的信息。
+
+四柱八字：
+{processed_data["four_pillars"]["year"]} {processed_data["four_pillars"]["month"]} {processed_data["four_pillars"]["day"]} {processed_data["four_pillars"]["hour"]}
+
+性别: {processed_data["gender"]}
+出生日期: {processed_data["birth_date"]}
+出生时间: {processed_data["birth_time"]}
+
+日主: {processed_data["day_master"]["character"]} ({processed_data["day_master"]["element"]})
+最强五行: {processed_data["elements"]["strongest"]}
+最弱五行: {processed_data["elements"]["weakest"]}
+
+请提供详细而有趣的"{clean_topic}"分析。"""
+                    elif system_name == "tarot":
+                        # Reconstruct tarot reading summary from processed data
+                        card_info = ""
+                        if "reading" in processed_data:
+                            for i, card in enumerate(processed_data["reading"], 1):
+                                position = card.get("position", f"位置{i}")
+                                card_name = card.get("card", "")
+                                orientation = card.get("orientation", "")
+                                card_info += f"{position}: {card_name} ({orientation})\n"
+                        
+                        user_prompt = f"""基于刚才的塔罗牌阵分析，请详细解读"{clean_topic}"方面的信息。
+
+塔罗牌阵：{processed_data.get("spread", {}).get("name", "未知牌阵")}
+问题：{processed_data.get("question", "未知")}
+领域：{processed_data.get("focus_area", "未知")}
+
+抽取的牌：
+{card_info}
+
+请提供详细而有深度的"{clean_topic}"分析。"""
+                    elif system_name == "zodiac":
+                        # Construct zodiac reading summary from processed data
+                        sign_info = processed_data.get("zodiac_sign", {})
+                        
+                        user_prompt = f"""基于刚才的星盘分析，请详细解读"{clean_topic}"方面的信息。
+
+太阳星座：{sign_info.get("name", "未知")} ({sign_info.get("english", "Unknown")})
+月亮星座：{processed_data.get("moon_sign", "未知")}
+上升星座：{processed_data.get("rising_sign", "未知")}
+
+元素：{sign_info.get("element", "未知")}
+品质：{sign_info.get("quality", "未知")}
+主宰星：{sign_info.get("ruler", "未知")}
+
+关注领域：{processed_data.get("question_area", "未知")}
+
+请提供详细而有洞见的"{clean_topic}"分析。"""
+                    else:
+                        # Generic prompt as fallback
+                        user_prompt = f"""基于刚才的命理分析，请详细解读"{clean_topic}"方面的信息。
+                        
+请提供详细而有专业的"{clean_topic}"分析。"""
+                    
+                    def handle_followup_streaming(response_generator, start_time, thinking_anim=None):
+                        """话题解读流式输出处理函数"""
+                        nonlocal animation
+                        # 停止主加载动画
+                        animation.stop()
+                        
+                        # 如果有思考动画，停止它
+                        if thinking_anim:
+                            thinking_anim.stop()
+                        
+                        # 使用流式输出展示结果
+                        return print_followup_result_streaming(
+                            selected_topic,
+                            response_generator
+                        )
+                    
+                    def handle_followup_standard(response, metadata, thinking_anim=None):
+                        """话题解读标准输出处理函数"""
+                        nonlocal animation
+                        
+                        # 停止加载动画
+                        animation.stop()
+                        
+                        # 如果有思考动画，也停止它
+                        if thinking_anim:
+                            thinking_anim.stop()
+                        
+                        # 使用标准方式显示结果
+                        print_followup_result(selected_topic, response)
+                        return response
+                    
+                    # Import and setup thinking animation
+                    from fortune_teller.ui.thinking_animation import ChatThinkingAnimation
+                    
+                    # 先完全停止主动画，确保它不再显示任何内容
                     animation.stop()
                     
-                    # Display the result
-                    content = list(followup_result["analysis"].values())[0]
-                    print_followup_result(selected_topic, content)
+                    # 清除现有输出行，确保没有残留动画文本
+                    sys.stdout.write("\r" + " " * 60 + "\r") 
+                    sys.stdout.flush()
+                    
+                    # 等待一小段时间确保主动画完全停止
+                    time.sleep(0.1)
+                    
+                    # 显示即时反馈（在API调用前）
+                    thinking_animation = ChatThinkingAnimation(prefix="")
+                    print(f"\n{Colors.GREEN}解读中: {Colors.ENDC}", end="", flush=True)
+                    thinking_animation.start()
+                    
+                    # 使用统一的API生成响应
+                    response = fortune_teller.llm_connector.generate_best_response(
+                        system_prompt, 
+                        user_prompt,
+                        streaming_handler=lambda gen, st: handle_followup_streaming(gen, st, thinking_animation),
+                        non_streaming_handler=lambda resp, meta: handle_followup_standard(resp, meta, thinking_animation)
+                    )
                     
                 except Exception as e:
                     animation.stop()
