@@ -501,7 +501,6 @@ def run_interactive_menu(fortune_teller, args):
                 # Define handlers for streaming and non-streaming responses
                 def handle_streaming(response_generator, start_time):
                     """流式输出处理函数"""
-                    nonlocal animation
                     # Stop animation before streaming output begins
                     animation.stop()
                     
@@ -513,8 +512,7 @@ def run_interactive_menu(fortune_teller, args):
                 
                 def handle_standard(response, metadata):
                     """标准输出处理函数"""
-                    nonlocal animation, system
-                    # Format the result
+                    # Format the result using the system variable from parent scope
                     result = system.format_result(response)
                     
                     # Add metadata to the result
@@ -666,7 +664,7 @@ def run_chat_mode(fortune_teller, system_name=None):
                 # 定义聊天的处理函数
                 def handle_chat_streaming(response_generator, start_time, thinking_anim):
                     """聊天流式输出处理函数"""
-                    nonlocal animation, chat_context
+                    # Use animation and chat_context from parent scope directly
                     # Stop main animation (the loading one)
                     animation.stop()
                     
@@ -707,7 +705,7 @@ def run_chat_mode(fortune_teller, system_name=None):
                 
                 def handle_chat_standard(response, metadata, thinking_anim):
                     """聊天标准输出处理函数"""
-                    nonlocal animation
+                    # Use animation directly from parent scope
                     # 停止所有动画
                     animation.stop()
                     thinking_anim.stop()
@@ -979,7 +977,7 @@ def run_followup_menu(fortune_teller):
                     
                     def handle_followup_streaming(response_generator, start_time, thinking_anim=None):
                         """话题解读流式输出处理函数"""
-                        nonlocal animation
+                        # Use animation from parent scope
                         # 停止主加载动画
                         animation.stop()
                         
@@ -995,7 +993,7 @@ def run_followup_menu(fortune_teller):
                     
                     def handle_followup_standard(response, metadata, thinking_anim=None):
                         """话题解读标准输出处理函数"""
-                        nonlocal animation
+                        # Use animation from parent scope directly
                         
                         # 停止加载动画
                         animation.stop()
