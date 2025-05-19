@@ -138,6 +138,7 @@ class LLMConnector:
                 else:
                     response = self._call_openai(system_prompt, user_prompt)
             elif self.provider == "deepseek":
+                print("handler determined")
                 if self.client is None:
                     logger.warning("DeepSeek client not initialized, falling back to mock connector")
                     response = self._mock_response(system_prompt, user_prompt)
@@ -178,6 +179,7 @@ class LLMConnector:
 
     def _call_openai(self, system_prompt: str, user_prompt: str) -> Tuple[str, Dict[str, Any]]:
         """Call the OpenAI API with the given prompts."""
+        print("function calling OpenAI API")
         if self.client is None:
             return "Error: OpenAI client not initialized", {"error": "Client not initialized"}
 
@@ -191,10 +193,11 @@ class LLMConnector:
                 model=self.model,
                 messages=messages,
                 temperature=self.temperature,
-                max_tokens=self.max_tokens
+                max_tokens=self.max_tokens,
             )
 
             text_response = response.choices[0].message.content
+            print(text_response)
             metadata = {
                 "finish_reason": response.choices[0].finish_reason,
                 "usage": response.usage.to_dict() if hasattr(response.usage, "to_dict") else vars(response.usage),
@@ -319,6 +322,13 @@ class LLMConnector:
                 logger.info("Using OpenAI streaming client")
                 if self.client is None:
                     logger.warning("OpenAI client not initialized, falling back to mock streaming")
+                    yield from self._mock_response_streaming(system_prompt, user_prompt)
+                else:
+                    yield from self._call_openai_streaming(system_prompt, user_prompt)
+            elif self.provider == "deepseek":
+                logger.info("Using DeepSeek streaming client")
+                if self.client is None:
+                    logger.warning("DeepSeek client not initialized, falling back to mock streaming")
                     yield from self._mock_response_streaming(system_prompt, user_prompt)
                 else:
                     yield from self._call_openai_streaming(system_prompt, user_prompt)
