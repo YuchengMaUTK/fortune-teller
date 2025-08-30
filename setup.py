@@ -22,6 +22,7 @@ setup(
     entry_points={
         "console_scripts": [
             "fortune-teller=fortune_teller.main:run_cli",
+            "fortune-teller-strands=fortune_teller.strands_main:run_strands_cli",
         ],
     },
     classifiers=[

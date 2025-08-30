@@ -1,0 +1,63 @@
+# 开发环境配置
+
+environment: "development"
+
+# 调试配置
+debug:
+  enabled: true
+  verbose_logging: true
+  agent_debug: true
+  tool_debug: true
+
+# 数据库配置（开发环境）
+database:
+  type: "sqlite"
+  path: "dev_fortune_teller.db"
+  echo_sql: true
+
+# LLM 配置（开发环境）
+llm:
+  providers:
+    openai:
+      api_key: "${OPENAI_API_KEY}"
+      model: "gpt-3.5-turbo"
+      max_tokens: 1000
+    anthropic:
+      api_key: "${ANTHROPIC_API_KEY}"
+      model: "claude-3-haiku-20240307"
+      max_tokens: 1000
+    aws_bedrock:
+      region: "us-east-1"
+      model: "anthropic.claude-3-haiku-20240307-v1:0"
+      max_tokens: 1000
+
+# MCP 服务器配置（开发环境）
+mcp_servers:
+  tarot-mcp-server:
+    command: "python"
+    args: ["-m", "fortune_teller.mcp.tarot_server"]
+    env:
+      ENTROPY_SOURCE: "system"
+      DEBUG: "true"
+  
+  divination-mcp-server:
+    command: "python"
+    args: ["-m", "fortune_teller.mcp.divination_server"]
+    env:
+      QUANTUM_RANDOM_ENABLED: "false"
+      ATMOSPHERIC_NOISE_ENABLED: "false"
+      DEBUG: "true"
+
+# Web 管理界面配置
+web_admin:
+  enabled: true
+  host: "localhost"
+  port: 8080
+  debug: true
+  auto_reload: true
+
+# 测试配置
+testing:
+  mock_llm_responses: false
+  mock_mcp_tools: false
+  test_data_dir: "tests/data"

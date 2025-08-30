@@ -1,0 +1,47 @@
+# 主控制智能体配置
+
+agent:
+  name: "master_agent"
+  display_name: "霄占主控制器"
+  description: "负责请求路由、会话管理和智能体协调"
+
+# 路由配置
+routing:
+  systems:
+    bazi:
+      agent: "bazi_agent"
+      keywords: ["八字", "命理", "生辰", "四柱"]
+      priority: 1
+    tarot:
+      agent: "tarot_agent"
+      keywords: ["塔罗", "塔罗牌", "抽牌", "占卜"]
+      priority: 1
+    zodiac:
+      agent: "zodiac_agent"
+      keywords: ["星座", "占星", "星盘", "十二星座"]
+      priority: 1
+    chat:
+      agent: "chat_agent"
+      keywords: ["聊天", "咨询", "问题", "解释"]
+      priority: 2
+
+# 会话管理配置
+session:
+  timeout: 3600  # 1小时
+  max_concurrent: 100
+  cleanup_interval: 300  # 5分钟
+  state_persistence: true
+
+# 用户界面配置
+ui:
+  welcome_message: "欢迎使用霄占命理系统！"
+  language_prompt: "请选择语言 / Please select language:"
+  system_selection_prompt: "请选择占卜系统："
+  error_message: "系统出现错误，请稍后重试。"
+
+# 错误处理配置
+error_handling:
+  max_retries: 3
+  retry_delay: 1.0
+  fallback_agent: "chat_agent"
+  graceful_degradation: true

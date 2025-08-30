@@ -1,0 +1,87 @@
+# 生产环境配置
+
+environment: "production"
+
+# 调试配置
+debug:
+  enabled: false
+  verbose_logging: false
+  agent_debug: false
+  tool_debug: false
+
+# 数据库配置（生产环境）
+database:
+  type: "postgresql"
+  host: "${DB_HOST}"
+  port: 5432
+  database: "${DB_NAME}"
+  username: "${DB_USER}"
+  password: "${DB_PASSWORD}"
+  pool_size: 20
+  echo_sql: false
+
+# LLM 配置（生产环境）
+llm:
+  providers:
+    openai:
+      api_key: "${OPENAI_API_KEY}"
+      model: "gpt-4"
+      max_tokens: 2000
+      rate_limit: 100
+    anthropic:
+      api_key: "${ANTHROPIC_API_KEY}"
+      model: "claude-3-sonnet-20240229"
+      max_tokens: 2000
+      rate_limit: 100
+    aws_bedrock:
+      region: "${AWS_REGION}"
+      model: "anthropic.claude-3-sonnet-20240229-v1:0"
+      max_tokens: 2000
+
+# MCP 服务器配置（生产环境）
+mcp_servers:
+  tarot-mcp-server:
+    command: "python"
+    args: ["-m", "fortune_teller.mcp.tarot_server"]
+    env:
+      ENTROPY_SOURCE: "hardware"
+      SEED_REFRESH_INTERVAL: "300"
+      QUALITY_MONITORING: "true"
+  
+  divination-mcp-server:
+    command: "python"
+    args: ["-m", "fortune_teller.mcp.divination_server"]
+    env:
+      QUANTUM_RANDOM_ENABLED: "true"
+      ATMOSPHERIC_NOISE_ENABLED: "true"
+      QUALITY_THRESHOLD: "0.9"
+
+# Web 管理界面配置
+web_admin:
+  enabled: true
+  host: "0.0.0.0"
+  port: 8080
+  debug: false
+  auto_reload: false
+  ssl_enabled: true
+  ssl_cert: "${SSL_CERT_PATH}"
+  ssl_key: "${SSL_KEY_PATH}"
+
+# 监控和日志配置
+monitoring:
+  prometheus_enabled: true
+  prometheus_port: 9090
+  log_level: "INFO"
+  log_rotation: true
+  log_max_size: "100MB"
+  log_backup_count: 10
+
+# 安全配置
+security:
+  admin_auth_required: true
+  jwt_secret: "${JWT_SECRET}"
+  cors_origins: ["https://yourdomain.com"]
+  rate_limiting:
+    enabled: true
+    requests_per_minute: 30
+    burst_size: 10

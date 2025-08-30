@@ -1,0 +1,112 @@
+# 霄占 Strands Agents 配置文件
+# 定义智能体系统的运行时配置、智能体、工具和 MCP 服务
+
+runtime:
+  name: "fortune_teller_system"
+  version: "2.0.0"
+  max_agents: 50
+  message_timeout: 30
+  state_persistence: true
+
+agents:
+  - name: "master_agent"
+    class: "MasterAgent"
+    max_instances: 1
+    auto_start: true
+    config:
+      session_timeout: 3600
+      max_concurrent_sessions: 100
+
+  - name: "bazi_agent"
+    class: "BaZiAgent"
+    max_instances: 5
+    auto_start: true
+    config:
+      calculation_method: "traditional"
+      include_luck_cycles: true
+
+  - name: "tarot_agent"
+    class: "TarotAgent"
+    max_instances: 5
+    auto_start: true
+    config:
+      default_deck: "rider_waite"
+      use_mcp_randomizer: true
+
+  - name: "zodiac_agent"
+    class: "ZodiacAgent"
+    max_instances: 5
+    auto_start: true
+    config:
+      calculation_system: "western"
+      include_houses: true
+
+  - name: "chat_agent"
+    class: "ChatAgent"
+    max_instances: 10
+    auto_start: true
+    config:
+      max_context_length: 4000
+      conversation_memory: true
+
+  - name: "i18n_agent"
+    class: "I18nAgent"
+    max_instances: 1
+    auto_start: true
+    config:
+      supported_languages: ["zh", "en"]
+      default_language: "zh"
+
+  - name: "admin_agent"
+    class: "AdminAgent"
+    max_instances: 1
+    auto_start: true
+    config:
+      web_interface_port: 8080
+      monitoring_enabled: true
+
+tools:
+  - name: "llm_tool"
+    class: "LLMTool"
+    config:
+      providers: ["openai", "anthropic", "aws_bedrock"]
+      default_provider: "openai"
+      max_tokens: 2000
+      temperature: 0.7
+
+  - name: "date_tool"
+    class: "DateTool"
+    config:
+      lunar_calendar_data: "data/lunar_calendar.json"
+      solar_terms_data: "data/solar_terms.json"
+
+  - name: "tarot_data_tool"
+    class: "TarotDataTool"
+    config:
+      cards_data_file: "data/tarot/cards.json"
+      spreads_data_file: "data/tarot/spreads.json"
+
+  - name: "zodiac_data_tool"
+    class: "ZodiacDataTool"
+    config:
+      zodiac_data_file: "data/zodiac/signs.json"
+      houses_data_file: "data/zodiac/houses.json"
+
+mcp_tools:
+  - name: "tarot_card_drawer"
+    server: "tarot-mcp-server"
+    description: "专业塔罗牌抽卡服务，提供高质量随机性"
+    config:
+      entropy_source: "hardware"
+      shuffle_algorithm: "fisher_yates"
+      seed_refresh_interval: 300
+      orientation_probability: 0.33
+
+  - name: "divination_randomizer"
+    server: "divination-mcp-server"
+    description: "通用占卜随机化服务"
+    config:
+      quantum_random: true
+      atmospheric_noise: true
+      quality_threshold: 0.9
+      statistical_testing: true

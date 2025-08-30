@@ -19,14 +19,9 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
+MANIFEST
 
-# Log files
-*.log
-
-# Configuration with sensitive data
-config.yaml
-
-# Environment
+# Virtual environments
 .env
 .venv
 env/
@@ -35,9 +30,39 @@ ENV/
 env.bak/
 venv.bak/
 
-# IDE specific files
-.idea/
+# IDE
 .vscode/
+.idea/
 *.swp
 *.swo
+*~
+
+# Configuration files (may contain API keys)
+config.yaml
+.env.local
+.env.production
+
+# Logs
+*.log
+logs/
+
+# OS
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Testing
+.coverage
+.pytest_cache/
+.tox/
+htmlcov/
+
+# Temporary files
+*.tmp
+*.temp
+temp/
+tmp/

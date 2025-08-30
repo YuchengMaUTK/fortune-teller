@@ -1,0 +1,88 @@
+mcp:
+  version: "1.0"
+  description: "Fortune Teller MCP Tools Configuration"
+  
+  tools:
+    tarot_picker:
+      name: "Tarot Card Picker"
+      description: "High-quality random tarot card picker with Fisher-Yates shuffle"
+      path: "tools/tarot_picker.py"
+      timeout: 10
+      commands:
+        draw:
+          description: "Draw random tarot cards"
+          parameters:
+            - name: "count"
+              type: "integer"
+              default: 1
+              description: "Number of cards to draw (1-78)"
+            - name: "allow_reversed"
+              type: "boolean" 
+              default: true
+              description: "Allow reversed cards"
+        info:
+          description: "Get tarot deck information"
+          parameters: []
+      
+    bazi_converter:
+      name: "BaZi Four Pillars Converter"
+      description: "Convert birth date/time to Chinese Four Pillars (八字)"
+      path: "tools/bazi_converter.py"
+      timeout: 10
+      commands:
+        convert:
+          description: "Convert birth date to BaZi"
+          parameters:
+            - name: "year"
+              type: "integer"
+              required: true
+              description: "Birth year (e.g., 1990)"
+            - name: "month"
+              type: "integer"
+              required: true
+              description: "Birth month (1-12)"
+            - name: "day"
+              type: "integer"
+              required: true
+              description: "Birth day (1-31)"
+            - name: "hour"
+              type: "integer"
+              default: 12
+              description: "Birth hour (0-23)"
+        info:
+          description: "Get BaZi system information"
+          parameters: []
+
+    zodiac_converter:
+      name: "Western Zodiac Sign Converter"
+      description: "Convert birth date to accurate Western zodiac sign"
+      path: "tools/zodiac_converter.py"
+      timeout: 10
+      commands:
+        convert:
+          description: "Convert birth date to zodiac sign"
+          parameters:
+            - name: "year"
+              type: "integer"
+              required: true
+              description: "Birth year (e.g., 1990)"
+            - name: "month"
+              type: "integer"
+              required: true
+              description: "Birth month (1-12)"
+            - name: "day"
+              type: "integer"
+              required: true
+              description: "Birth day (1-31)"
+        info:
+          description: "Get zodiac system information"
+          parameters: []
+
+  servers:
+    # Future MCP servers can be configured here
+    
+  logging:
+    level: "INFO"
+    show_invocations: true
+    show_results: true
+    show_errors: true

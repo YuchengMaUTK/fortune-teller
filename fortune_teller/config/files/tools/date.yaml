@@ -1,0 +1,77 @@
+# 日期工具配置
+
+tool:
+  name: "date_tool"
+  description: "日期转换和计算工具"
+  version: "1.0.0"
+
+# 数据源配置
+data_sources:
+  lunar_calendar: "data/bazi/lunar_calendar.json"
+  solar_terms: "data/bazi/solar_terms.json"
+  time_zones: "data/bazi/timezones.json"
+  ephemeris: "data/bazi/ephemeris.json"
+
+# 计算配置
+calculation:
+  # 农历计算
+  lunar:
+    algorithm: "purple_mountain"  # purple_mountain, nasa
+    precision: "high"
+    include_leap_months: true
+    
+  # 节气计算
+  solar_terms:
+    algorithm: "astronomical"  # astronomical, traditional
+    precision: "minute"
+    timezone_aware: true
+    
+  # 八字计算
+  bazi:
+    stem_branch_system: "traditional"
+    hour_calculation: "true_solar_time"
+    timezone_handling: "birth_location"
+    
+  # 时辰计算
+  shichen:
+    system: "traditional"  # traditional, modern
+    boundary_handling: "inclusive"
+
+# 缓存配置
+cache:
+  enabled: true
+  lunar_conversion_ttl: 86400  # 24小时
+  solar_terms_ttl: 31536000   # 1年
+  bazi_calculation_ttl: 3600  # 1小时
+  max_cache_size: 10000
+
+# 验证配置
+validation:
+  date_range:
+    min_year: 1900
+    max_year: 2100
+  time_range:
+    min_hour: 0
+    max_hour: 23
+  coordinate_range:
+    min_latitude: -90
+    max_latitude: 90
+    min_longitude: -180
+    max_longitude: 180
+
+# 精度配置
+precision:
+  coordinate_decimal_places: 6
+  time_decimal_places: 2
+  angle_decimal_places: 4
+
+# 本地化配置
+localization:
+  default_language: "zh"
+  supported_languages: ["zh", "en"]
+  date_formats:
+    zh: "%Y年%m月%d日"
+    en: "%Y-%m-%d"
+  time_formats:
+    zh: "%H时%M分"
+    en: "%H:%M"

@@ -13,6 +13,14 @@ class Colors:
     ENDC = '\033[0m'
     BOLD = '\033[1m'
     UNDERLINE = '\033[4m'
+    WHITE = '\033[97m'
+    
+    # Background colors
+    BG_BLUE = '\033[44m'
+    BG_GREEN = '\033[42m'
+    BG_YELLOW = '\033[43m'
+    BG_RED = '\033[41m'
+    BG_CYAN = '\033[46m'
 
 # Five elements color mapping
 ELEMENT_COLORS = {

@@ -1,0 +1,28 @@
+{
+  "mcpServers": {
+    "tarot-card-drawer": {
+      "command": "python",
+      "args": ["-m", "fortune_teller.mcp.tarot_server"],
+      "env": {
+        "ENTROPY_SOURCE": "hardware",
+        "SHUFFLE_ROUNDS": "3",
+        "SEED_REFRESH_INTERVAL": "300",
+        "DEBUG": "false"
+      },
+      "disabled": false,
+      "autoApprove": ["draw_random_cards", "get_orientation", "get_entropy_quality"]
+    },
+    "divination-randomizer": {
+      "command": "python", 
+      "args": ["-m", "fortune_teller.mcp.divination_server"],
+      "env": {
+        "QUANTUM_RANDOM_ENABLED": "true",
+        "ATMOSPHERIC_NOISE_ENABLED": "true",
+        "QUALITY_THRESHOLD": "0.9",
+        "DEBUG": "false"
+      },
+      "disabled": false,
+      "autoApprove": ["quantum_random_int", "entropy_shuffle", "multi_source_random", "get_randomness_quality"]
+    }
+  }
+}

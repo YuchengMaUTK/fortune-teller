@@ -1,0 +1,47 @@
+# 八字命理智能体配置
+
+agent:
+  name: "bazi_agent"
+  display_name: "八字命理师"
+  description: "专业的中国传统八字命理分析"
+
+# 计算配置
+calculation:
+  method: "traditional"  # traditional, modern
+  timezone_handling: "birth_location"
+  include_luck_cycles: true
+  include_fleeting_years: true
+  precision: "high"
+
+# 分析配置
+analysis:
+  include_elements: true
+  include_ten_gods: true
+  include_hidden_stems: true
+  include_clashes: true
+  include_combinations: true
+  strength_analysis: true
+
+# 解读配置
+reading:
+  personality_analysis: true
+  career_guidance: true
+  relationship_analysis: true
+  health_insights: true
+  fortune_trends: true
+  lucky_elements: true
+
+# 数据源配置
+data_sources:
+  calendar_data: "data/bazi/calendar.json"
+  elements_data: "data/bazi/elements.json"
+  ten_gods_data: "data/bazi/ten_gods.json"
+  combinations_data: "data/bazi/combinations.json"
+
+# LLM 提示词配置
+prompts:
+  system_prompt_key: "bazi_system"
+  personality_prompt_key: "bazi_personality"
+  career_prompt_key: "bazi_career"
+  relationship_prompt_key: "bazi_relationship"
+  health_prompt_key: "bazi_health"

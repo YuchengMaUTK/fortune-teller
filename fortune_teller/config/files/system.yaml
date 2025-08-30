@@ -1,0 +1,54 @@
+# 霄占系统全局配置
+
+system:
+  name: "霄占 Fortune Teller"
+  version: "2.0.0"
+  description: "基于 Strands Agents 的多智能体占卜系统"
+  
+  # 日志配置
+  logging:
+    level: "INFO"
+    format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    file: "fortune_teller.log"
+    max_size: "10MB"
+    backup_count: 5
+    
+  # 数据目录配置
+  data:
+    root_dir: "fortune_teller/data"
+    tarot_dir: "tarot"
+    bazi_dir: "bazi"
+    zodiac_dir: "zodiac"
+    
+  # 缓存配置
+  cache:
+    enabled: true
+    type: "memory"  # memory, redis, file
+    ttl: 3600  # 1小时
+    max_size: 1000
+    
+  # 安全配置
+  security:
+    session_secret: "your-secret-key-here"
+    max_session_duration: 86400  # 24小时
+    rate_limiting:
+      enabled: true
+      requests_per_minute: 60
+      
+  # 性能配置
+  performance:
+    max_concurrent_requests: 100
+    request_timeout: 30
+    worker_threads: 4
+    
+  # 监控配置
+  monitoring:
+    enabled: true
+    metrics_port: 9090
+    health_check_interval: 30
+    
+  # 国际化配置
+  i18n:
+    default_language: "zh"
+    supported_languages: ["zh", "en"]
+    resources_dir: "fortune_teller/i18n"

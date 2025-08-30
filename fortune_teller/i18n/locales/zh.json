@@ -1,0 +1,47 @@
+{
+  "welcome_title": "欢迎使用霄占",
+  "welcome_subtitle": "古今命理，尽在掌握",
+  "language_select": "请选择语言",
+  "language_english": "English",
+  "language_chinese": "中文",
+  
+  "system_select": "可用的占卜系统",
+  "system_bazi": "八字命理",
+  "system_bazi_desc": "传统中国八字命理，基于出生年、月、日、时分析命运",
+  "system_tarot": "塔罗牌",
+  "system_tarot_desc": "基于传统塔罗牌解读的占卜系统",
+  "system_zodiac": "星座占星",
+  "system_zodiac_desc": "基于西方占星学和十二星座的命运分析",
+  
+  "input_birth_date": "请输入您的出生日期 (格式: YYYY-MM-DD，如 1990-01-15):",
+  "input_birth_time": "请输入您的出生时间 (格式: HH:MM，如 14:30):",
+  "input_gender": "请选择您的性别:",
+  "input_question": "请输入您的问题:",
+  
+  "gender_male": "男",
+  "gender_female": "女",
+  
+  "tarot_spread_single": "单牌阅读 - 抽取一张牌进行简单的阅读",
+  "tarot_spread_three": "三牌阵 - 过去、现在、未来的经典三牌阵",
+  "tarot_spread_celtic": "凯尔特十字 - 详细分析当前情况和潜在结果的经典阵列",
+  "tarot_spread_relationship": "关系阵 - 分析两个人之间关系的牌阵",
+  
+  "generating_reading": "正在生成解读...",
+  "reading_complete": "解读完成！",
+  "chat_continue": "与霄占命理师继续对话",
+  "chat_prompt": "聊天或选择系统:",
+  
+  "navigation_arrows": "使用 ↑↓ 方向键导航，回车选择，'q' 退出",
+  "navigation_select": "请选择 (1/2/3):",
+  "navigation_quit": "退出",
+  
+  "error_invalid_date": "无效的日期格式，请使用 YYYY-MM-DD",
+  "error_invalid_time": "无效的时间格式，请使用 HH:MM",
+  "error_llm_unavailable": "LLM服务暂时不可用，请稍后重试",
+  "error_selection_cancelled": "已取消选择",
+  "error_initialization_failed": "初始化失败",
+  
+  "status_selected": "已选择",
+  "status_cancelled": "用户取消，退出系统",
+  "status_goodbye": "霄占系统已安全关闭。感谢使用！"
+}

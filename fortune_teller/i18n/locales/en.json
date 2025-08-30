@@ -1,0 +1,47 @@
+{
+  "welcome_title": "Welcome to Fortune Teller",
+  "welcome_subtitle": "Ancient Wisdom at Your Fingertips",
+  "language_select": "Please select language",
+  "language_english": "English",
+  "language_chinese": "中文",
+  
+  "system_select": "Available Fortune Systems",
+  "system_bazi": "BaZi Fortune Telling",
+  "system_bazi_desc": "Traditional Chinese BaZi fortune telling based on birth year, month, day, and time",
+  "system_tarot": "Tarot Cards", 
+  "system_tarot_desc": "Fortune telling based on traditional tarot card readings",
+  "system_zodiac": "Western Astrology",
+  "system_zodiac_desc": "Fortune analysis based on Western astrology and zodiac signs",
+  
+  "input_birth_date": "Please enter your birth date (YYYY-MM-DD, e.g., 1990-01-15):",
+  "input_birth_time": "Please enter your birth time (HH:MM, e.g., 14:30):",
+  "input_gender": "Please select your gender:",
+  "input_question": "Please enter your question:",
+  
+  "gender_male": "Male",
+  "gender_female": "Female",
+  
+  "tarot_spread_single": "Single Card Reading - Draw one card for simple reading",
+  "tarot_spread_three": "Three Card Spread - Past, Present, Future classic spread", 
+  "tarot_spread_celtic": "Celtic Cross - Detailed analysis of current situation and potential outcomes",
+  "tarot_spread_relationship": "Relationship Spread - Analyze relationships between two people",
+  
+  "generating_reading": "Generating reading...",
+  "reading_complete": "Reading completed!",
+  "chat_continue": "Continue chatting with Fortune Teller",
+  "chat_prompt": "Chat or select system:",
+  
+  "navigation_arrows": "Use ↑↓ arrow keys to navigate, Enter to select, 'q' to quit",
+  "navigation_select": "Please select (1/2/3):",
+  "navigation_quit": "quit",
+  
+  "error_invalid_date": "Invalid date format. Please use YYYY-MM-DD",
+  "error_invalid_time": "Invalid time format. Please use HH:MM", 
+  "error_llm_unavailable": "LLM service unavailable, please try again later",
+  "error_selection_cancelled": "Selection cancelled",
+  "error_initialization_failed": "Initialization failed",
+  
+  "status_selected": "selected",
+  "status_cancelled": "User cancelled, exiting system",
+  "status_goodbye": "Fortune Teller system safely closed. Thank you for using!"
+}

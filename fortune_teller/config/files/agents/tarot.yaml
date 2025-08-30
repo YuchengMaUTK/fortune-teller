@@ -1,0 +1,64 @@
+# 塔罗牌智能体配置
+
+agent:
+  name: "tarot_agent"
+  display_name: "塔罗占卜师"
+  description: "专业的塔罗牌占卜和解读"
+
+# 牌组配置
+deck:
+  default_deck: "rider_waite"
+  available_decks: ["rider_waite", "thoth", "marseille"]
+  total_cards: 78
+  major_arcana_count: 22
+  minor_arcana_count: 56
+
+# 抽牌配置
+drawing:
+  use_mcp_randomizer: true
+  shuffle_rounds: 3
+  orientation_enabled: true
+  orientation_probability: 0.33  # 33% 逆位概率
+
+# 牌阵配置
+spreads:
+  available_spreads:
+    - name: "single_card"
+      display_name: "单牌占卜"
+      card_count: 1
+      positions: ["当前状况"]
+    - name: "three_card"
+      display_name: "三牌占卜"
+      card_count: 3
+      positions: ["过去", "现在", "未来"]
+    - name: "celtic_cross"
+      display_name: "凯尔特十字"
+      card_count: 10
+      positions: ["现状", "挑战", "远因", "近因", "可能结果", "近期", "内在", "外在", "希望恐惧", "最终结果"]
+
+# 解读配置
+reading:
+  include_card_meaning: true
+  include_position_meaning: true
+  include_orientation_meaning: true
+  include_card_combinations: true
+  include_overall_message: true
+  include_advice: true
+
+# 数据源配置
+data_sources:
+  cards_data: "data/tarot/cards.json"
+  spreads_data: "data/tarot/spreads.json"
+  combinations_data: "data/tarot/combinations.json"
+
+# MCP 工具配置
+mcp_tools:
+  card_drawer: "tarot_card_drawer"
+  randomizer: "divination_randomizer"
+
+# LLM 提示词配置
+prompts:
+  system_prompt_key: "tarot_system"
+  reading_prompt_key: "tarot_reading"
+  advice_prompt_key: "tarot_advice"
+  combination_prompt_key: "tarot_combination"
