@@ -9,7 +9,9 @@
 ╚═╝  ╚═╝╚═╝╚═╝  ╚═╝ ╚═════╝      ╚══════╝╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝
 ```
 
-> ✨ 古今命理，尽在掌握 ✨
+> ✨ Ancient Wisdom at Your Fingertips / 古今命理，尽在掌握 ✨
+
+**English | [中文](README.zh.md)**
 
 A modern, AI-powered fortune telling application supporting multiple divination systems with streaming responses and intuitive keyboard navigation.
 
