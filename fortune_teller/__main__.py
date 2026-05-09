@@ -1,10 +1,6 @@
-#!/usr/bin/env python3
-"""
-Fortune Teller - Main entry point
-"""
+"""Entry point for `python -m fortune_teller`."""
 
-import asyncio
-from .simple_main import main
+from .main import main
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()

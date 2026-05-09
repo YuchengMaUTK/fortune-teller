@@ -21,8 +21,7 @@ setup(
     python_requires=">=3.7",
     entry_points={
         "console_scripts": [
-            "fortune-teller=fortune_teller.main:run_cli",
-            "fortune-teller-strands=fortune_teller.strands_main:run_strands_cli",
+            "fortune-teller=fortune_teller.main:main",
         ],
     },
     classifiers=[

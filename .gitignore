@@ -66,3 +66,9 @@ htmlcov/
 *.temp
 temp/
 tmp/
+
+# Runtime data
+data/sessions/
+
+# Local virtual envs used for ad-hoc testing
+.venv-test/

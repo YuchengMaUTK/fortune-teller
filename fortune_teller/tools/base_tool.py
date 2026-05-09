@@ -6,9 +6,6 @@ from abc import ABC, abstractmethod
 from typing import Dict, Any, Optional
 import logging
 
-# TODO: Import from strands-agents when available
-# from strands_agents import StrandsTool
-
 logger = logging.getLogger(__name__)
 
 
