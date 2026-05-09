@@ -243,61 +243,63 @@ def print_reading_result(result: Dict[str, Any], output_path: str = None):
         print(f"{content}")
         print(f"\n{Colors.CYAN}" + "-" * 40 + f"{Colors.ENDC}\n")
 
-def print_reading_result_streaming(result_generator: Generator[str, None, None], output_path: str = None, start_time: float = None) -> str:
-    """
-    Print the streaming fortune reading result to the console, displaying content as it arrives.
-    
+def print_reading_result_streaming(
+    result_generator: Generator[str, None, None],
+    output_path: str = None,
+    start_time: float = None,
+    pending_animation=None,
+) -> str:
+    """Print a streaming fortune reading.
+
     Args:
-        result_generator: Generator yielding text chunks of the fortune reading
-        output_path: Path where the result will be saved (optional)
-        start_time: Timestamp when the API call was initiated (for latency measurement)
-        
+        result_generator: Generator yielding text chunks.
+        output_path: Path where the result will be saved (optional).
+        start_time: Timestamp when the API call was initiated (for latency).
+        pending_animation: Optional LoadingAnimation that should keep spinning
+            until the first non-empty chunk arrives (first-token latency).
+
     Returns:
-        Complete response text (for potential saving or further processing)
+        The complete response text.
     """
-    # Setup logger for chunk tracking
     chunk_logger = logging.getLogger("StreamingChunks")
     chunk_logger.setLevel(logging.DEBUG)
-    
-    # Ensure we have a file handler for the chunk log
     if not chunk_logger.handlers:
         chunk_handler = logging.FileHandler('streaming_chunks.log')
-        chunk_formatter = logging.Formatter('%(asctime)s - %(message)s')
-        chunk_handler.setFormatter(chunk_formatter)
+        chunk_handler.setFormatter(logging.Formatter('%(asctime)s - %(message)s'))
         chunk_logger.addHandler(chunk_handler)
-    
-    # Log start of streaming
     chunk_logger.info("=== START OF STREAMING SESSION ===")
-    
-    # Show preparing message
-    print(f"\n{Colors.GREEN}✨ 正在生成解读，请稍候... ✨{Colors.ENDC}\n")
-    
-    # Display the result header
-    print(f"{Colors.CYAN}" + "=" * 60 + f"{Colors.ENDC}\n")
-    
-    # Collect the complete response while printing chunks
+
     complete_response = ""
     chunk_count = 0
+    header_printed = False
     json_start_pattern = re.compile(r'^\s*\{')
     json_mode_detected = False
-    
-    # For measuring first chunk latency
     first_chunk_time = None
-    
+
+    def _finish_pending():
+        """Stop the pending animation and print the reading header."""
+        nonlocal header_printed
+        if pending_animation is not None:
+            pending_animation.stop()
+        if not header_printed:
+            print(f"\n{Colors.GREEN}✨ 正在生成解读 ✨{Colors.ENDC}\n")
+            print(f"{Colors.CYAN}" + "=" * 60 + f"{Colors.ENDC}\n")
+            header_printed = True
+
     try:
         for chunk in result_generator:
-            # Record time of first non-empty chunk
             if chunk_count == 0 and start_time:
                 first_chunk_time = time.time()
                 latency = first_chunk_time - start_time
                 chunk_logger.info(f"⏱️ 首个块延迟: {latency:.3f}秒")
-                print(f"{Colors.CYAN}⏱️ 响应延迟: {latency:.3f}秒{Colors.ENDC}")
-            
+
             chunk_count += 1
-            
-            # Skip empty chunks
+
             if not chunk or chunk.strip() == "":
                 continue
+
+            # First real chunk — stop the spinner and print header.
+            _finish_pending()
                 
             # Log each chunk with details
             chunk_repr = repr(chunk)
@@ -322,26 +324,20 @@ def print_reading_result_streaming(result_generator: Generator[str, None, None],
             
             # Print chunk and force flush to show immediately
             sys.stdout.write(clean_chunk)
-            sys.stdout.flush()  # Flush buffer
-            
-            # Add to complete response
+            sys.stdout.flush()
+
             complete_response += clean_chunk
-            
-            # Add delay to ensure terminal has time to update and create a smoother reading experience
-            # This is especially important for terminals that may buffer output
-            time.sleep(0.05)  # Increased from 0.01 for smoother output
-            
-            # Every few chunks, add a dummy flush/write to force update
-            if chunk_count % 5 == 0:
-                sys.stdout.write("")  # Write empty string to force update
-                sys.stdout.flush()    # Additional flush
     except KeyboardInterrupt:
-        # Handle user interruption
+        _finish_pending()
         print(f"\n\n{Colors.RED}解读生成已被中断{Colors.ENDC}")
     except Exception as e:
-        # Handle errors
+        _finish_pending()
         print(f"\n\n{Colors.RED}解读生成出错: {e}{Colors.ENDC}")
-    
+    finally:
+        # Guarantee the spinner is stopped even if we never got a chunk.
+        if pending_animation is not None:
+            pending_animation.stop()
+
     # Print footer
     print(f"\n\n{Colors.CYAN}" + "=" * 60 + f"{Colors.ENDC}")
     
@@ -370,66 +366,63 @@ def print_followup_result(topic: str, content: str):
     print(f"\n{Colors.CYAN}" + "-" * 40 + f"{Colors.ENDC}\n")
 
 
-def print_followup_result_streaming(topic: str, result_generator: Generator[str, None, None]) -> str:
-    """
-    Print the streaming followup reading result to the console.
-    
+def print_followup_result_streaming(
+    topic: str,
+    result_generator: Generator[str, None, None],
+    pending_animation=None,
+) -> str:
+    """Print a streaming follow-up reading.
+
     Args:
-        topic: The topic of the followup reading
-        result_generator: Generator yielding text chunks of the reading
-        
-    Returns:
-        Complete response text
+        topic: The topic name.
+        result_generator: Generator yielding text chunks.
+        pending_animation: Optional LoadingAnimation that should keep
+            spinning until the first non-empty chunk arrives.
     """
-    # Setup logger for chunk tracking
     chunk_logger = logging.getLogger("StreamingChunks")
     chunk_logger.setLevel(logging.DEBUG)
-    
-    # Ensure we have a file handler for the chunk log
     if not chunk_logger.handlers:
         chunk_handler = logging.FileHandler('streaming_chunks.log')
-        chunk_formatter = logging.Formatter('%(asctime)s - %(message)s')
-        chunk_handler.setFormatter(chunk_formatter)
+        chunk_handler.setFormatter(logging.Formatter('%(asctime)s - %(message)s'))
         chunk_logger.addHandler(chunk_handler)
-    
-    # Log start of streaming
     chunk_logger.info(f"=== START OF STREAMING SESSION FOR TOPIC: {topic} ===")
-    
-    # Display header
-    print(f"\n{Colors.BOLD}{Colors.YELLOW}✨ {topic}详解 ✨{Colors.ENDC}")
-    print(f"{Colors.CYAN}" + "=" * 60 + f"{Colors.ENDC}\n")
-    
-    # Collect complete response while printing chunks
+
     complete_response = ""
     chunk_count = 0
-    
+    header_printed = False
+
+    def _finish_pending():
+        nonlocal header_printed
+        if pending_animation is not None:
+            pending_animation.stop()
+        if not header_printed:
+            print(f"\n{Colors.BOLD}{Colors.YELLOW}✨ {topic}详解 ✨{Colors.ENDC}")
+            print(f"{Colors.CYAN}" + "=" * 60 + f"{Colors.ENDC}\n")
+            header_printed = True
+
     try:
         for chunk in result_generator:
             chunk_count += 1
-            
-            # Log each chunk with details
-            chunk_repr = repr(chunk)
-            chunk_logger.info(f"Topic '{topic}' Chunk #{chunk_count} | Length: {len(chunk)} | Content: {chunk_repr}")
-            
-            # Print chunk without newline and flush to show immediately
+            if not chunk or chunk.strip() == "":
+                continue
+
+            _finish_pending()
+            chunk_logger.info(f"Topic '{topic}' Chunk #{chunk_count} | Length: {len(chunk)} | Content: {chunk!r}")
+
             sys.stdout.write(chunk)
             sys.stdout.flush()
-            
-            # Add to complete response
             complete_response += chunk
-            
-            # Add delay to ensure terminal has time to update and create a smoother reading experience
-            time.sleep(0.05)  # Added delay for smoother output
     except KeyboardInterrupt:
-        # Handle user interruption
+        _finish_pending()
         print(f"\n\n{Colors.RED}解读生成已被中断{Colors.ENDC}")
     except Exception as e:
-        # Handle errors
+        _finish_pending()
         print(f"\n\n{Colors.RED}解读生成出错: {e}{Colors.ENDC}")
-    
-    # Print footer
+    finally:
+        if pending_animation is not None:
+            pending_animation.stop()
+
     print(f"\n\n{Colors.CYAN}" + "-" * 40 + f"{Colors.ENDC}")
-    
     return complete_response
 
 
@@ -480,32 +473,23 @@ def get_user_inputs(fortune_system: BaseFortuneSystem) -> Dict[str, Any]:
         
         # Get the input based on type
         if input_type == "select" and "options" in input_info:
-            # For select type, show options
-            print(f"\n{description}:")
+            from .keyboard_input import pick_from_list
+
             options = input_info["options"]
-            for i, option in enumerate(options, 1):
-                if isinstance(option, dict):
-                    print(f"{i}. {option['label']} - {option['description']}")
-                else:
-                    print(f"{i}. {option}")
-            
+            labels = [
+                f"{o['label']} — {o['description']}" if isinstance(o, dict) else str(o)
+                for o in options
+            ]
             while True:
-                value = input(f"请选择一个选项 (1-{len(options)}): ")
-                if not value and not required:
+                idx = pick_from_list(labels, title=description)
+                if idx is not None:
+                    chosen = options[idx]
+                    value = chosen["value"] if isinstance(chosen, dict) else chosen
                     break
-                
-                try:
-                    index = int(value) - 1
-                    if 0 <= index < len(options):
-                        if isinstance(options[index], dict):
-                            value = options[index]["value"]
-                        else:
-                            value = options[index]
-                        break
-                    else:
-                        print(f"请输入1到{len(options)}之间的数字")
-                except ValueError:
-                    print("请输入有效的数字")
+                if not required:
+                    value = None
+                    break
+                print(f"{Colors.YELLOW}{description} 为必填，请选择一项{Colors.ENDC}")
             
         elif input_type == "date":
             # Date input
