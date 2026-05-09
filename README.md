@@ -13,143 +13,152 @@
 
 **English | [中文](README.zh.md)**
 
-A modern, AI-powered fortune telling application supporting multiple divination systems with streaming responses and intuitive keyboard navigation.
+A terminal fortune telling app that combines classical divination systems with modern LLMs. Streamed readings, bilingual UI, arrow-key navigation.
 
 ## 🌟 Features
 
-- **🀄 BaZi (八字命理)** - Traditional Chinese fortune telling based on birth date and time
-- **🃏 Tarot Cards** - Classic tarot card readings with multiple spreads
-- **⭐ Western Astrology** - Zodiac-based fortune analysis
-- **🌍 Bilingual Support** - English and Chinese with professional i18n system
-- **⌨️ Modern Interface** - Smooth keyboard navigation with arrow keys
-- **⚡ Real-time Streaming** - Watch your reading appear word by word
-- **🎯 MCP Integration** - Accurate calculations using Model Context Protocol tools
+- **🀄 BaZi (八字命理)** — Traditional Chinese four-pillars reading driven by birth date/time
+- **🃏 Tarot** — Card draws with several spreads and interpretation
+- **⭐ Western Astrology** — Sun-sign analysis by birth date
+- **💬 Follow-up chat** — Ask deeper questions after the main reading (career, relationships, health, timing…)
+- **🌍 Bilingual** — English / 中文, selectable at launch or via `--lang`
+- **⌨️ Arrow-key menus** — Falls back to numeric prompt when stdin isn't a TTY
+- **⚡ Real streaming** — Tokens stream directly from the LLM; a spinner covers first-token latency
+- **🔌 Multi-provider LLM** — AWS Bedrock (Claude), Anthropic direct, OpenAI, DeepSeek
 
 ## 🚀 Quick Start
 
 ```bash
-# 1. Clone the repository
-git clone https://github.com/yourusername/fortune-teller.git
+# 1. Clone
+git clone https://github.com/YuchengMaUTK/fortune-teller.git
 cd fortune-teller
 
 # 2. Install dependencies
+python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 
-# 3. Copy configuration
-cp config.yaml.example config.yaml  # For real LLM
-# OR
-cp config.yaml.mock config.yaml     # For testing without API keys
+# 3. Configure
+cp config.yaml.example config.yaml
+# Edit config.yaml — pick a provider, plug in credentials. See below.
 
-# 4. Run the application
-python -m fortune_teller.simple_main
+# 4. Run
+python -m fortune_teller
 ```
 
-## 🎮 Usage
+**Useful flags:**
 
-1. **Language Selection** - Use arrow keys to choose English or Chinese
-2. **System Selection** - Pick your preferred divination method
-3. **Input Information** - Provide birth details or questions as needed
-4. **Watch Reading Generate** - See your fortune appear in real-time
-5. **Interactive Navigation** - Smooth, modern interface throughout
-
-## 🏗️ Architecture
-
-### Core Components
-
-- **🧠 AI Agents** - Specialized agents for each fortune telling system
-- **🔧 MCP Tools** - Accurate calculations for BaZi, Tarot, and Zodiac
-- **🌍 I18n System** - Clean, JSON-based internationalization
-- **🎨 UI Components** - Modern keyboard navigation and streaming output
-- **⚙️ LLM Integration** - Support for AWS Bedrock, OpenAI, and Anthropic
-
-### Project Structure
-
-```
-fortune_teller/
-├── agents/                 # Fortune telling agents
-│   ├── bazi_agent.py      # BaZi fortune telling
-│   ├── tarot_agent.py     # Tarot card reading
-│   └── zodiac_agent.py    # Western astrology
-├── tools/                  # Core tools
-│   ├── llm_tool.py        # LLM integration with streaming
-│   └── mcp_tool.py        # Model Context Protocol tools
-├── mcp/                    # MCP tool implementations
-│   └── tools/             # BaZi, Tarot, Zodiac converters
-├── i18n/                   # Internationalization
-│   └── locales/           # English and Chinese translations
-├── ui/                     # User interface
-│   ├── keyboard_input.py  # Arrow key navigation
-│   └── colors.py          # Terminal styling
-└── simple_main.py         # Clean main application
+```bash
+python -m fortune_teller --lang en        # skip the language picker
+python -m fortune_teller --system bazi    # skip the system picker
+python -m fortune_teller --list           # list available systems
+python -m fortune_teller --verbose        # enable console logging
 ```
 
 ## 🔧 Configuration
 
-### LLM Providers
+All configuration lives in `config.yaml`. The example file documents every provider; pick **one** `llm:` block.
 
-Choose your preferred LLM provider by setting environment variables:
+### AWS Bedrock (recommended)
 
-**AWS Bedrock:**
-```bash
-export AWS_ACCESS_KEY_ID=your_key
-export AWS_SECRET_ACCESS_KEY=your_secret
-export AWS_REGION=us-east-1
+```yaml
+llm:
+  provider: aws_bedrock
+  model: us.anthropic.claude-sonnet-4-5-20250929-v1:0
+  region: us-west-2
+  temperature: 0.7
+  max_tokens: 2000
+  # profile: my-profile    # optional named ~/.aws profile
 ```
 
-**OpenAI:**
-```bash
-export OPENAI_API_KEY=your_key
+Credentials are resolved by the **boto3 default chain**:
+
+1. Explicit `aws_access_key` / `aws_secret_key` in `config.yaml`
+2. `profile:` field pointing at a named AWS profile
+3. Environment variables (`AWS_ACCESS_KEY_ID`, `AWS_PROFILE`, …)
+4. `~/.aws/credentials` default profile, SSO, IMDS, `credential_process`, …
+
+If `aws sts get-caller-identity` works in your shell, the connector will work too.
+
+### Anthropic direct
+
+```yaml
+llm:
+  provider: anthropic
+  model: claude-sonnet-4-5-20250929
 ```
 
-**Anthropic:**
-```bash
-export ANTHROPIC_API_KEY=your_key
+Reads the key from `ANTHROPIC_API_KEY`.
+
+### OpenAI
+
+```yaml
+llm:
+  provider: openai
+  model: gpt-4o-mini
 ```
 
-### Mock Mode (No API Keys Required)
+Reads the key from `OPENAI_API_KEY`.
 
-For testing without LLM services:
-```bash
-cp config.yaml.mock config.yaml
-python -m fortune_teller.simple_main
+### DeepSeek
+
+```yaml
+llm:
+  provider: deepseek
+  model: deepseek-chat
 ```
 
-## 🌍 Internationalization
+Reads the key from `DEEPSEEK_API_KEY`.
 
-The application supports English and Chinese with a clean i18n system:
+## 🎮 Usage
 
-```python
-from fortune_teller.i18n import t
+1. Pick a language (arrow keys / `q` to quit)
+2. Pick a fortune system
+3. Fill in the prompted information — birth date/time, question, spread
+4. Watch the reading stream in
+5. After the main reading, pick a follow-up topic for a deeper analysis, or chat freely with 霄占
 
-# Get translated text
-title = t("welcome_title", "en")  # "Welcome to Fortune Teller"
-title = t("welcome_title", "zh")  # "欢迎使用霄占"
+## 🏗️ Architecture
+
+```
+fortune_teller/
+├── main.py              # CLI entry point, interactive menu, follow-up, chat
+├── core/
+│   ├── llm_connector.py # Unified LLM dispatch (Bedrock/Anthropic/OpenAI/DeepSeek)
+│   ├── aws_connector.py # Bedrock streaming + non-streaming
+│   ├── config_manager.py
+│   ├── plugin_manager.py
+│   └── mock_connector.py
+├── plugins/             # Fortune systems (each ships its own prompts + data)
+│   ├── bazi/
+│   ├── tarot/
+│   └── zodiac/
+├── tools/
+│   ├── llm_tool.py      # LLMTool wrapper (reads config.yaml)
+│   └── mcp_tools.py     # Subprocess wrapper around mcp/tools/*.py
+├── ui/
+│   ├── keyboard_input.py # Arrow-key menus, TTY-aware
+│   ├── display.py        # Streaming printer, headers, animations
+│   └── animation.py
+└── i18n/
+    └── locales/         # en.json / zh.json
 ```
 
-Adding new languages is simple - just add a new JSON file in `i18n/locales/`.
-
-## 🎯 MCP Tools
-
-Accurate fortune telling calculations powered by Model Context Protocol:
-
-- **BaZi Converter** - Precise four pillars calculation
-- **Tarot Converter** - Card drawing and interpretation
-- **Zodiac Converter** - Astrological sign determination
+`mcp/tools/` at the repo root contains the pure-Python calculators for BaZi pillars, tarot draws, and zodiac signs; they're CLI scripts that `tools/mcp_tools.py` shells out to.
 
 ## 🤝 Contributing
 
-We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the development setup, coding conventions, and guidance for adding new fortune systems or translations.
 
 ## 📄 License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+MIT — see [LICENSE](LICENSE).
 
 ## 🙏 Acknowledgments
 
-- Traditional Chinese fortune telling wisdom
-- Modern AI and LLM technologies
-- The open source community
+- Traditional Chinese fortune-telling lore
+- Anthropic, OpenAI, AWS Bedrock, DeepSeek — the LLMs doing the heavy lifting
+- Everyone who opened an issue or sent a PR
 
 ---
 
-**Experience the fusion of ancient wisdom and modern technology with 霄占 Fortune Teller!** ✨
+**Ancient wisdom, modern plumbing. Enjoy.** ✨
