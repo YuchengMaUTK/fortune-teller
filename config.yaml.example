@@ -1,24 +1,66 @@
-# Fortune Teller Sample Configuration File
-# Copy this file to 'config.yaml' and modify as needed
+# Fortune Teller Sample Configuration
+# Copy to config.yaml and edit for your setup.
 
 app:
   name: "Fortune Teller"
   version: "0.1.0"
   debug: false
 
-# LLM Configuration for AWS Bedrock (Claude)
+# ============================================================================
+# LLM Configuration
+# ============================================================================
+# Pick ONE provider block below. Comment out the others.
+
+# --- AWS Bedrock (recommended) ---------------------------------------------
+# Credentials are resolved by the boto3 default chain:
+#   1. aws_access_key / aws_secret_key fields below (if set)
+#   2. `profile:` named below -> ~/.aws/credentials or ~/.aws/config
+#   3. Env vars: AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY / AWS_PROFILE
+#   4. Default profile, SSO, IMDS, etc.
 llm:
   provider: "aws_bedrock"
-  model: "anthropic.claude-3-5-haiku-20241022-v1:0"
+  # Use an inference profile ID for cross-region models (us.* / eu.*):
+  model: "us.anthropic.claude-sonnet-4-5-20250929-v1:0"
+  region: "us-west-2"
   temperature: 0.7
   max_tokens: 2000
-  region: "us-west-2"  # 替换为您的 AWS 区域
-  # 可以在此处设置AWS凭证，但更推荐使用环境变量
-  # aws_access_key: "your_access_key_here" 
-  # aws_secret_key: "your_secret_key_here"
-  # aws_session_token: "your_session_token_here"  # 如果使用临时凭证
+  # Optional: named AWS profile from ~/.aws/credentials or ~/.aws/config.
+  # profile: "my-profile"
+  # Optional: explicit keys (takes precedence over profile/env).
+  # aws_access_key: "AKIA..."
+  # aws_secret_key: "..."
+  # aws_session_token: "..."
 
-# Plugin Configuration
+# --- OpenAI ----------------------------------------------------------------
+# llm:
+#   provider: "openai"
+#   model: "gpt-4o-mini"
+#   temperature: 0.7
+#   max_tokens: 2000
+#   # api_key read from OPENAI_API_KEY env var by default.
+
+# --- Anthropic (direct) ----------------------------------------------------
+# llm:
+#   provider: "anthropic"
+#   model: "claude-sonnet-4-5-20250929"
+#   temperature: 0.7
+#   max_tokens: 2000
+#   # api_key read from ANTHROPIC_API_KEY env var by default.
+
+# --- DeepSeek (OpenAI-compatible) -----------------------------------------
+# llm:
+#   provider: "deepseek"
+#   model: "deepseek-chat"
+#   temperature: 0.7
+#   max_tokens: 2000
+#   # api_key read from DEEPSEEK_API_KEY env var by default.
+
+# --- Mock (no API key, for offline testing) --------------------------------
+# llm:
+#   provider: "mock"
+#   model: "mock-model"
+
+# ============================================================================
 plugins:
   enabled: ["bazi", "tarot", "zodiac"]
   bazi:
@@ -27,24 +69,3 @@ plugins:
     data_dir: "data/tarot"
   zodiac:
     data_dir: "data/zodiac"
-
-# 样例 OpenAI 设置 (取消注释以使用)
-# llm:
-#   provider: "openai"
-#   model: "gpt-4"
-#   temperature: 0.7
-#   max_tokens: 2000
-
-# 样例 Anthropic 直连设置 (取消注释以使用)
-# llm:
-#   provider: "anthropic"
-#   model: "claude-2"
-#   temperature: 0.7
-#   max_tokens: 2000
-
-# 样例 Mock 模式设置 (用于测试，无需API密钥)
-# llm:
-#   provider: "mock"
-#   model: "mock-model"
-#   temperature: 0.7
-#   max_tokens: 2000

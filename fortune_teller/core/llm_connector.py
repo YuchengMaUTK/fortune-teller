@@ -52,19 +52,29 @@ class LLMConnector:
         
         if self.provider == "openai":
             try:
-                import openai
-                self.client = openai
-                logger.info("OpenAI client initialized successfully")
+                from openai import OpenAI, OpenAIError
+                try:
+                    self.client = OpenAI(api_key=self.api_key)
+                    logger.info("OpenAI client initialized successfully")
+                except OpenAIError as e:
+                    logger.error(f"OpenAI client init failed: {e}")
+                    self.client = None
             except ImportError:
-                logger.error("OpenAI package not installed. Install with: pip install openai")
+                logger.error("openai package not installed. Install with: pip install openai")
                 self.client = None
         elif self.provider == "deepseek":
             try:
-                from openai import OpenAI
-                self.client = OpenAI(api_key=self.api_key, base_url="https://api.deepseek.com")
-                logger.info("DeepSeek client initialized successfully")
+                from openai import OpenAI, OpenAIError
+                try:
+                    self.client = OpenAI(
+                        api_key=self.api_key, base_url="https://api.deepseek.com"
+                    )
+                    logger.info("DeepSeek client initialized successfully")
+                except OpenAIError as e:
+                    logger.error(f"DeepSeek client init failed: {e}")
+                    self.client = None
             except ImportError:
-                logger.error("OpenAI package not installed. Install with: pip install openai")
+                logger.error("openai package not installed. Install with: pip install openai")
                 self.client = None
         elif self.provider == "anthropic":
             try:
@@ -72,7 +82,7 @@ class LLMConnector:
                 self.client = anthropic.Anthropic(api_key=self.api_key)
                 logger.info("Anthropic client initialized successfully")
             except ImportError:
-                logger.error("Anthropic package not installed. Install with: pip install anthropic")
+                logger.error("anthropic package not installed. Install with: pip install anthropic")
                 self.client = None
         elif self.provider == "aws_bedrock":
             try:
@@ -195,10 +205,11 @@ class LLMConnector:
             )
 
             text_response = response.choices[0].message.content
+            usage = response.usage
             metadata = {
                 "finish_reason": response.choices[0].finish_reason,
-                "usage": response.usage.to_dict() if hasattr(response.usage, "to_dict") else vars(response.usage),
-                "model": response.model
+                "usage": usage.model_dump() if hasattr(usage, "model_dump") else vars(usage),
+                "model": response.model,
             }
 
             return text_response, metadata
@@ -208,24 +219,28 @@ class LLMConnector:
             return f"Error: {str(e)}", {"error": str(e)}
 
     def _call_anthropic(self, system_prompt: str, user_prompt: str) -> Tuple[str, Dict[str, Any]]:
-        """Call the Anthropic API with the given prompts."""
+        """Call the Anthropic Messages API (Claude 3+)."""
         if self.client is None:
             return "Error: Anthropic client not initialized", {"error": "Client not initialized"}
 
         try:
-            prompt = f"{self.client.HUMAN_PROMPT} {user_prompt} {self.client.AI_PROMPT}"
-
-            response = self.client.completions.create(
-                prompt=prompt,
+            response = self.client.messages.create(
                 model=self.model,
-                max_tokens_to_sample=self.max_tokens,
-                temperature=self.temperature
+                max_tokens=self.max_tokens,
+                temperature=self.temperature,
+                system=system_prompt,
+                messages=[{"role": "user", "content": user_prompt}],
             )
 
-            text_response = response.completion
+            text_response = "".join(
+                block.text for block in response.content if getattr(block, "type", None) == "text"
+            )
             metadata = {
                 "stop_reason": response.stop_reason,
-                "model": response.model
+                "model": response.model,
+                "usage": response.usage.model_dump()
+                if hasattr(response.usage, "model_dump")
+                else vars(response.usage),
             }
 
             return text_response, metadata
@@ -233,6 +248,28 @@ class LLMConnector:
         except Exception as e:
             logger.error(f"Anthropic API error: {e}")
             return f"Error: {str(e)}", {"error": str(e)}
+
+    def _call_anthropic_streaming(
+        self, system_prompt: str, user_prompt: str
+    ) -> Generator[str, None, None]:
+        """Stream text chunks from Anthropic Messages API."""
+        if self.client is None:
+            yield "Error: Anthropic client not initialized"
+            return
+
+        try:
+            with self.client.messages.stream(
+                model=self.model,
+                max_tokens=self.max_tokens,
+                temperature=self.temperature,
+                system=system_prompt,
+                messages=[{"role": "user", "content": user_prompt}],
+            ) as stream:
+                for text in stream.text_stream:
+                    yield text
+        except Exception as e:
+            logger.error(f"Anthropic streaming error: {e}")
+            yield f"\nError during streaming: {str(e)}"
 
     def _mock_response(self, system_prompt: str, user_prompt: str) -> Tuple[str, Dict[str, Any]]:
         """Generate a mock response using the MockConnector."""
@@ -329,9 +366,13 @@ class LLMConnector:
                     yield from self._mock_response_streaming(system_prompt, user_prompt)
                 else:
                     yield from self._call_openai_streaming(system_prompt, user_prompt)
-            elif self.provider == "anthropic" or self.provider == "deepseek":
-                logger.info(f"{self.provider} streaming not directly supported, falling back to mock streaming")
-                yield from self._mock_response_streaming(system_prompt, user_prompt)
+            elif self.provider == "anthropic":
+                logger.info("Using Anthropic streaming client")
+                if self.client is None:
+                    logger.warning("Anthropic client not initialized, falling back to mock streaming")
+                    yield from self._mock_response_streaming(system_prompt, user_prompt)
+                else:
+                    yield from self._call_anthropic_streaming(system_prompt, user_prompt)
             else:
                 # Default to mock streaming responses for unsupported providers
                 logger.info(f"Streaming not supported for provider: {self.provider}, using mock streaming")
@@ -412,8 +453,8 @@ class LLMConnector:
         import time
         import datetime
         
-        # 检查是否应该使用流式输出
-        use_streaming = os.environ.get("FORTUNE_TELLER_STREAMING", "false").lower() in ("true", "1", "yes")
+        # Streaming is on by default; set FORTUNE_TELLER_STREAMING=false to disable.
+        use_streaming = os.environ.get("FORTUNE_TELLER_STREAMING", "true").lower() in ("true", "1", "yes")
         
         try:
             if use_streaming and streaming_handler is not None:

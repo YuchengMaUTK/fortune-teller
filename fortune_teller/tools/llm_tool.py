@@ -21,24 +21,16 @@ class LLMTool(BaseTool):
         self.llm_connector = None
     
     async def _setup(self) -> None:
-        """初始化 LLM 连接器"""
-        try:
-            from ..core.llm_connector import LLMConnector
-            
-            # 使用默认配置初始化连接器
-            config = {
-                "provider": "aws_bedrock",  # 使用 AWS Bedrock
-                "model": "anthropic.claude-3-5-haiku-20241022-v1:0",
-                "temperature": 0.7,
-                "max_tokens": 2000
-            }
-            
-            self.llm_connector = LLMConnector(config)
-            self.logger.info("LLM connector initialized successfully")
-            
-        except Exception as e:
-            self.logger.error(f"Failed to initialize LLM connector: {e}")
-            self.llm_connector = None
+        """Initialise the LLM connector from config.yaml."""
+        from ..core.llm_connector import LLMConnector
+        from ..core.config_manager import ConfigManager
+
+        config = ConfigManager().get_config("llm") or {}
+        self.llm_connector = LLMConnector(config)
+        self.logger.info(
+            f"LLM connector initialized "
+            f"(provider={config.get('provider')}, model={config.get('model')})"
+        )
     
     async def generate_response(self, 
                               system_prompt: str, 
