@@ -54,36 +54,45 @@ logger = logging.getLogger("FortuneTeller")
 
 class FortuneTeller:
     """Main Fortune Teller application class."""
-    
-    def __init__(self, config_file: str = None):
+
+    def __init__(self, config_file: str = None, language: str = "zh"):
         """
         Initialize the Fortune Teller application.
-        
+
         Args:
             config_file: Path to configuration file
+            language: UI / reading output language code ("zh" or "en").
         """
         # Initialize configuration
         self.config_manager = ConfigManager(config_file)
-        
+
         # Initialize plugin manager
         self.plugin_manager = PluginManager()
-        
+
         # Initialize LLM connector
         llm_config = self.config_manager.get_config("llm")
         self.llm_connector = LLMConnector(llm_config)
-        
+
+        # UI + LLM output language
+        self.language = language
+
         # Load plugins
         self.load_plugins()
-        
+
         # Cache for processed data (used for follow-up questions)
         self._last_processed_data = {}
-        
-        logger.info("Fortune Teller initialized")
+
+        logger.info(f"Fortune Teller initialized (language={self.language})")
     
     def load_plugins(self) -> None:
         """Load and initialize fortune telling plugins."""
         num_loaded = self.plugin_manager.load_all_plugins()
         logger.info(f"Loaded {num_loaded} fortune telling plugins")
+
+    def _localized_system_prompt(self, system_prompt: str) -> str:
+        """Append the language directive so the LLM replies in the user's language."""
+        from .i18n import t
+        return f"{system_prompt}\n\n{t('llm_language_directive', self.language)}"
     
     def get_available_systems(self) -> List[Dict[str, Any]]:
         """
@@ -140,10 +149,10 @@ class FortuneTeller:
             
             # Generate LLM prompts
             prompts = fortune_system.generate_llm_prompt(processed_data)
-            
+
             # Get LLM response
             llm_response, metadata = self.llm_connector.generate_response(
-                prompts["system_prompt"],
+                self._localized_system_prompt(prompts["system_prompt"]),
                 prompts["user_prompt"]
             )
             
@@ -341,7 +350,7 @@ class FortuneTeller:
             
             # Get LLM response for the follow-up
             llm_response, metadata = self.llm_connector.generate_response(
-                system_prompt,
+                self._localized_system_prompt(system_prompt),
                 user_prompt
             )
             
@@ -398,58 +407,56 @@ class FortuneTeller:
 def run_interactive_menu(fortune_teller, args):
     """
     Run the interactive command-line interface.
-    
+
     Args:
         fortune_teller: FortuneTeller instance
         args: Parsed command-line arguments
     """
+    from .i18n import t
+    lang = fortune_teller.language
+
     try:
-        first_run = True  # 添加标志位控制欢迎画面显示
-        
+        first_run = True
+
         while True:  # Main loop to allow returning to the main menu
-            # 仅在首次运行时显示欢迎画面
             if first_run:
                 print_welcome_screen()
-                first_run = False  # 重置标志位
+                first_run = False
             else:
-                # 显示简化的标题，而不是完整的欢迎画面
-                print(f"\n{Colors.BOLD}{Colors.YELLOW}✨ 霄占命理系统 ✨{Colors.ENDC}")
+                print(f"\n{Colors.BOLD}{Colors.YELLOW}{t('banner_short', lang)}{Colors.ENDC}")
                 print(f"{Colors.CYAN}" + "=" * 60 + f"{Colors.ENDC}")
-        
-            
+
             # Get available systems
             available_systems = fortune_teller.get_available_systems()
             if not available_systems:
-                print(f"{Colors.RED}错误: 没有找到可用的占卜系统{Colors.ENDC}")
+                print(f"{Colors.RED}{t('error_no_systems', lang)}{Colors.ENDC}")
                 return
-            
+
             # Select a system
             system = None
             if args.system:
-                # Find the specified system
                 for sys in available_systems:
                     if sys["name"] == args.system:
                         system = fortune_teller.plugin_manager.get_plugin(args.system)
                         break
-                
+
                 if not system:
-                    print(f"错误: 未找到占卜系统 '{args.system}'")
+                    print(t("error_system_not_found", lang).format(name=args.system))
                     print_available_systems(available_systems)
                     return
             else:
-                # Let the user choose a system
-                print_available_systems(available_systems)
-                while True:
-                    try:
-                        choice = int(input("请选择一个占卜系统 (输入序号): "))
-                        if 1 <= choice <= len(available_systems):
-                            system_info = available_systems[choice - 1]
-                            system = fortune_teller.plugin_manager.get_plugin(system_info["name"])
-                            break
-                        else:
-                            print(f"请输入1到{len(available_systems)}之间的数字")
-                    except ValueError:
-                        print("请输入有效的数字")
+                from .ui.keyboard_input import pick_from_list
+
+                labels = [
+                    f"{info.get('display_name', info['name'])} — {info.get('description', '')}"
+                    for info in available_systems
+                ]
+                idx = pick_from_list(labels, title=f"✨ {t('system_select', lang)} ✨")
+                if idx is None:
+                    print(f"{Colors.YELLOW}{t('error_selection_cancelled', lang)}{Colors.ENDC}")
+                    return
+                system_info = available_systems[idx]
+                system = fortune_teller.plugin_manager.get_plugin(system_info["name"])
             
             # Get user inputs for the selected system
             inputs = get_user_inputs(system)
@@ -471,10 +478,10 @@ def run_interactive_menu(fortune_teller, args):
                 }
                 
                 # Confirm to proceed
-                input(f"\n{Colors.CYAN}按回车键继续生成详细解读...{Colors.ENDC}")
-                
+                input(f"\n{Colors.CYAN}{t('prompt_continue_to_reading', lang)}{Colors.ENDC}")
+
             except Exception as e:
-                print(f"{Colors.RED}处理数据时出错: {str(e)}{Colors.ENDC}")
+                print(f"{Colors.RED}{t('error_processing_data', lang).format(msg=str(e))}{Colors.ENDC}")
                 continue  # Return to the main menu instead of exiting
             
             # Generate LLM prompts from the stored processed data
@@ -493,21 +500,21 @@ def run_interactive_menu(fortune_teller, args):
                 }
                 output_path = fortune_teller.save_reading(empty_result, args.output)
             
-            # Show loading animation for non-streaming mode
+            # Show loading animation while we wait for the first token.
             animation = LoadingAnimation("正在连接大语言模型，解析命理")
             animation.start()
 
             try:
                 # Define handlers for streaming and non-streaming responses
                 def handle_streaming(response_generator, start_time):
-                    """流式输出处理函数"""
-                    # Stop animation before streaming output begins
-                    animation.stop()
-                    
+                    """Stream handler. Keeps the spinner running until the
+                    first real chunk arrives (print_reading_result_streaming
+                    stops it via pending_animation)."""
                     return print_reading_result_streaming(
-                        response_generator, 
+                        response_generator,
                         output_path,
-                        start_time=start_time
+                        start_time=start_time,
+                        pending_animation=animation,
                     )
                 
                 def handle_standard(response, metadata):
@@ -537,7 +544,7 @@ def run_interactive_menu(fortune_teller, args):
                 
                 # Use unified API for response generation
                 complete_response = fortune_teller.llm_connector.generate_best_response(
-                    prompts["system_prompt"],
+                    fortune_teller._localized_system_prompt(prompts["system_prompt"]),
                     prompts["user_prompt"],
                     streaming_handler=handle_streaming,
                     non_streaming_handler=handle_standard
@@ -621,7 +628,9 @@ def run_chat_mode(fortune_teller, system_name=None):
         animation.start()
         
         # Get initial greeting from LLM
-        response, _ = fortune_teller.llm_connector.generate_response(system_prompt, user_prompt)
+        response, _ = fortune_teller.llm_connector.generate_response(
+            fortune_teller._localized_system_prompt(system_prompt), user_prompt
+        )
         
         # Stop animation
         animation.stop()
@@ -734,7 +743,7 @@ def run_chat_mode(fortune_teller, system_name=None):
                 
                 # 使用统一的API生成响应
                 response = fortune_teller.llm_connector.generate_best_response(
-                    system_prompt, 
+                    fortune_teller._localized_system_prompt(system_prompt),
                     chat_prompt,
                     streaming_handler=lambda gen, st: handle_chat_streaming(gen, st, thinking_animation),
                     non_streaming_handler=lambda resp, meta: handle_chat_standard(resp, meta, thinking_animation)
@@ -796,15 +805,16 @@ def run_followup_menu(fortune_teller):
             valid_topics.append("💬 与霄占聊天")
         
         # Display menu with freshly generated topics list
-        display_topic_menu(valid_topics)
-        
+        from .ui.keyboard_input import pick_from_list
+
+        topic_index = pick_from_list(
+            valid_topics, title="✨ 请选择要深入解读的主题 ✨ (按 q 返回主菜单)"
+        )
+        if topic_index is None:
+            print(f"\n{Colors.YELLOW}✨ 解读完成，感谢您使用霄占命理系统! ✨{Colors.ENDC}")
+            return True  # Return to main menu
+
         try:
-            choice = input(f"\n{Colors.BOLD}请选择 (0-{len(valid_topics)}): {Colors.ENDC}")
-            if choice.strip() == "0" or choice.strip().lower() == "q":
-                print(f"\n{Colors.YELLOW}✨ 解读完成，感谢您使用霄占命理系统! ✨{Colors.ENDC}")
-                return True  # Return to main menu
-            
-            topic_index = int(choice) - 1
             if 0 <= topic_index < len(valid_topics):
                 selected_topic = valid_topics[topic_index]
                 
@@ -976,19 +986,11 @@ def run_followup_menu(fortune_teller):
 请提供详细而有专业的"{clean_topic}"分析。"""
                     
                     def handle_followup_streaming(response_generator, start_time, thinking_anim=None):
-                        """话题解读流式输出处理函数"""
-                        # Use animation from parent scope
-                        # 停止主加载动画
-                        animation.stop()
-                        
-                        # 如果有思考动画，停止它
-                        if thinking_anim:
-                            thinking_anim.stop()
-                        
-                        # 使用流式输出展示结果
+                        """Let the spinner run until the first chunk arrives."""
                         return print_followup_result_streaming(
                             selected_topic,
-                            response_generator
+                            response_generator,
+                            pending_animation=thinking_anim or animation,
                         )
                     
                     def handle_followup_standard(response, metadata, thinking_anim=None):
@@ -1026,7 +1028,7 @@ def run_followup_menu(fortune_teller):
                     
                     # 使用统一的API生成响应
                     response = fortune_teller.llm_connector.generate_best_response(
-                        system_prompt, 
+                        fortune_teller._localized_system_prompt(system_prompt),
                         user_prompt,
                         streaming_handler=lambda gen, st: handle_followup_streaming(gen, st, thinking_animation),
                         non_streaming_handler=lambda resp, meta: handle_followup_standard(resp, meta, thinking_animation)
@@ -1056,36 +1058,52 @@ def main():
     parser.add_argument("--system", help="使用指定的占卜系统")
     parser.add_argument("--output", help="输出结果文件路径")
     parser.add_argument("--verbose", action="store_true", help="显示详细日志")
-    
+    parser.add_argument(
+        "--lang", choices=["zh", "en"],
+        help="UI / reading language (default: prompt interactively, fall back to zh)",
+    )
+
     args = parser.parse_args()
-    
+
     # Configure console logging if verbose mode is enabled
     if args.verbose:
         console_handler = logging.StreamHandler()
         console_handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
         logging.getLogger().addHandler(console_handler)
-    
+
+    # Resolve language: --lang > interactive picker (TTY) > zh default
+    from .i18n import t
+    language = args.lang
+    if language is None and not args.list and sys.stdin.isatty():
+        from .ui.keyboard_input import select_language
+        try:
+            language = select_language()
+        except KeyboardInterrupt:
+            language = None
+        if language is None:
+            language = "zh"
+    if language is None:
+        language = "zh"
+
     try:
-        # Show initialization message
-        print(f"{Colors.CYAN}正在初始化系统...{Colors.ENDC}")
-        
-        # Initialize the application
-        fortune_teller = FortuneTeller(args.config)
-        
+        print(f"{Colors.CYAN}{t('status_initializing', language)}{Colors.ENDC}")
+
+        fortune_teller = FortuneTeller(args.config, language=language)
+
         # Show LLM information
         llm_config = fortune_teller.config_manager.get_config("llm")
         print_llm_info(llm_config)
-        
+
         if args.list:
             # Just list available systems and exit
             print_available_systems(fortune_teller.get_available_systems())
             return
-        
+
         # Run the interactive menu
         run_interactive_menu(fortune_teller, args)
-        
+
     except Exception as e:
-        print(f"错误: {e}")
+        print(t("error_generic", language).format(msg=e))
         traceback.print_exc()
 
 

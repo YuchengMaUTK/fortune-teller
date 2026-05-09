@@ -35,61 +35,99 @@ class KeyboardMenu:
         
         return key
     
+    # Lines rendered below the last option: blank line + hint line.
+    _LINES_BELOW_OPTIONS = 2
+
     def _display_menu(self):
-        """Display the menu with current selection highlighted"""
-        if not hasattr(self, '_menu_displayed'):
-            # First time display - clear screen and show full menu
-            print('\033[2J\033[H', end='')
-            
+        """Render (or update) the menu inline at the cursor's current position.
+
+        First call prints title / options / hint from the current line and
+        leaves the cursor below the hint. Subsequent calls move the cursor
+        back up to the options block, redraw each option (with \\033[K to
+        clear leftover characters), then move back down so the cursor stays
+        just past the hint line. This lets the menu coexist with whatever
+        was printed above it (e.g. a streamed reading).
+        """
+        if not hasattr(self, "_menu_displayed"):
             if self.title:
                 print(f"{Colors.BOLD}{Colors.YELLOW}{self.title}{Colors.ENDC}")
                 print()
-            
-            # Store the starting line for options
-            self._options_start_line = 3 if self.title else 1
-            
-            # Display all options initially
             for i, option in enumerate(self.options):
                 if i == self.selected_index:
                     print(f"{Colors.BG_BLUE}{Colors.WHITE}► {option}{Colors.ENDC}")
                 else:
                     print(f"  {option}")
-            
-            print(f"\n{Colors.CYAN}Use ↑↓ arrow keys to navigate, Enter to select, 'q' to quit{Colors.ENDC}")
+            print()
+            print(f"{Colors.CYAN}Use ↑↓ arrow keys to navigate, Enter to select, 'q' to quit{Colors.ENDC}")
             self._menu_displayed = True
         else:
-            # Update mode - only redraw the options that changed
+            lines_up = len(self.options) + self._LINES_BELOW_OPTIONS
+            print(f"\033[{lines_up}A", end="")
             for i, option in enumerate(self.options):
-                # Move cursor to this option's line
-                line_num = self._options_start_line + i
-                print(f'\033[{line_num}H', end='')
-                
+                # \r: column 0; \033[K: clear to end of line so wider old text
+                # doesn't leave stray characters.
                 if i == self.selected_index:
-                    print(f"{Colors.BG_BLUE}{Colors.WHITE}► {option}{Colors.ENDC}\033[K")  # \033[K clears to end of line
+                    print(f"\r{Colors.BG_BLUE}{Colors.WHITE}► {option}{Colors.ENDC}\033[K")
                 else:
-                    print(f"  {option}\033[K")
-        
-        # Flush output for immediate display
-        import sys
+                    print(f"\r  {option}\033[K")
+            print(f"\033[{self._LINES_BELOW_OPTIONS}B", end="")
+
         sys.stdout.flush()
-    
+
     def show(self) -> Optional[int]:
-        """Show menu and return selected index, None if quit"""
-        while True:
-            self._display_menu()
-            
-            key = self._get_key()
-            
-            if key == '\x1b[A':  # Up arrow
-                self.selected_index = max(0, self.selected_index - 1)
-            elif key == '\x1b[B':  # Down arrow
-                self.selected_index = min(self.max_index, self.selected_index + 1)
-            elif key == '\r' or key == '\n':  # Enter
-                return self.selected_index
-            elif key.lower() == 'q':  # Quit
-                return None
-            elif key == '\x03':  # Ctrl+C
-                raise KeyboardInterrupt
+        """Show menu and return selected index, None if quit."""
+        try:
+            while True:
+                self._display_menu()
+                key = self._get_key()
+
+                if key == "\x1b[A":  # Up arrow
+                    self.selected_index = max(0, self.selected_index - 1)
+                elif key == "\x1b[B":  # Down arrow
+                    self.selected_index = min(self.max_index, self.selected_index + 1)
+                elif key in ("\r", "\n"):
+                    return self.selected_index
+                elif key.lower() == "q":
+                    return None
+                elif key == "\x03":  # Ctrl+C
+                    raise KeyboardInterrupt
+        finally:
+            # Ensure next output lands on a fresh line, not on top of the menu.
+            print()
+            sys.stdout.flush()
+
+
+def pick_from_list(
+    options: List[str],
+    title: str = "",
+    default_index: int = 0,
+) -> Optional[int]:
+    """Pick an option from a list. Returns chosen index, or None if cancelled.
+
+    Uses arrow-key navigation when stdin is a TTY; falls back to a numbered
+    prompt otherwise (so pytest, pipes, and CI work).
+    """
+    if sys.stdin.isatty():
+        try:
+            return KeyboardMenu(options, title=title, selected_index=default_index).show()
+        except (OSError, termios.error):
+            pass  # fall through to numeric prompt
+
+    if title:
+        print(f"{Colors.BOLD}{Colors.YELLOW}{title}{Colors.ENDC}")
+    for i, option in enumerate(options, 1):
+        print(f"  {i}. {option}")
+    while True:
+        raw = input(f"请选择 (1-{len(options)}, q 退出): ").strip().lower()
+        if raw in ("q", "quit", ""):
+            return None
+        try:
+            idx = int(raw) - 1
+            if 0 <= idx < len(options):
+                return idx
+        except ValueError:
+            pass
+        print(f"{Colors.RED}无效输入，请重试{Colors.ENDC}")
 
 
 def select_language() -> Optional[str]:
