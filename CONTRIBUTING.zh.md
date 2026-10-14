@@ -220,7 +220,7 @@ python -m fortune_teller
 python tests/test_simple_streaming.py
 
 # 测试i18n系统
-python tests/test_i18n_complete.py
+python -m pytest tests/test_i18n_complete.py
 ```
 
 ### 自动化测试

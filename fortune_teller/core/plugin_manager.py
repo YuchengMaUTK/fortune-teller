@@ -10,9 +10,6 @@ import logging
 from typing import Dict, List, Optional, Type
 from .base_system import BaseFortuneSystem
 
-# Configure logging
-logging.basicConfig(level=logging.INFO, 
-                    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger("PluginManager")
 
 

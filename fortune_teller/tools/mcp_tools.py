@@ -15,21 +15,21 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-# Repository root: fortune_teller/tools/mcp_tools.py -> ../../
-_TOOLS_DIR = os.path.abspath(
-    os.path.join(os.path.dirname(__file__), "..", "..", "mcp", "tools")
-)
+_MODULES = {
+    name + ".py": "fortune_teller.calculators." + name
+    for name in ("bazi_converter", "tarot_picker", "zodiac_converter")
+}
 
 
 def _run_cli(script: str, args: List[str], timeout: int = 10) -> Dict[str, Any]:
-    """Invoke a CLI tool under mcp/tools/ and parse its JSON output."""
-    path = os.path.join(_TOOLS_DIR, script)
-    if not os.path.exists(path):
-        return {"success": False, "error": f"tool not found: {path}"}
+    """Invoke a packaged calculator so wheels work outside the source checkout."""
+    module = _MODULES.get(script)
+    if module is None:
+        return {"success": False, "error": f"unknown tool: {script}"}
 
     try:
         result = subprocess.run(
-            [sys.executable, path, *args],
+            [sys.executable, "-m", module, *args],
             capture_output=True,
             text=True,
             timeout=timeout,
@@ -109,12 +109,12 @@ class MCPBaZiTool:
     """Legacy BaZi wrapper (kept for backward compatibility)."""
 
     async def convert_to_bazi(
-        self, year: int, month: int, day: int, hour: int = 12
+        self, year: int, month: int, day: int, hour: int = 12, minute: int = 0, second: int = 0
     ) -> Dict[str, Any]:
         logger.info(f"[MCP] BaZi convert: {year}-{month:02d}-{day:02d} {hour:02d}:00")
         return _run_cli(
             "bazi_converter.py",
-            ["convert", str(year), str(month), str(day), str(hour)],
+            ["convert", str(year), str(month), str(day), str(hour), str(minute), str(second)],
         )
 
     async def get_system_info(self) -> Dict[str, Any]:

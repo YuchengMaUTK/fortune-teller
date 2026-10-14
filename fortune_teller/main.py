@@ -14,29 +14,6 @@ import time
 import datetime
 from typing import Dict, Any, List, Optional
 
-# 静默所有第三方库的日志，将它们仅输出到文件
-# 这段代码必须在导入任何其他库之前执行
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler('fortune_teller.log')
-    ]
-)
-
-# 移除所有已存在的根日志处理器，防止输出到控制台
-root_logger = logging.getLogger()
-for handler in root_logger.handlers[:]:
-    root_logger.removeHandler(handler)
-root_logger.addHandler(logging.FileHandler('fortune_teller.log'))
-
-# 特别处理常见的噪音库
-for logger_name in ["boto3", "botocore", "urllib3", "s3transfer", 
-                   "boto3.resources", "botocore.credentials"]:
-    specific_logger = logging.getLogger(logger_name)
-    specific_logger.setLevel(logging.ERROR)  # 只显示错误级别日志
-    specific_logger.propagate = False  # 不向上传播日志
-
 from fortune_teller.core import BaseFortuneSystem, PluginManager, LLMConnector, ConfigManager
 from fortune_teller.ui.colors import Colors
 from fortune_teller.ui.display import (
@@ -706,7 +683,7 @@ def run_chat_mode(fortune_teller, system_name=None):
                         complete_response += chunk
                         
                         # 适当延迟以确保更流畅的阅读体验
-                        time.sleep(0.05)  # 从0.01增加到0.05，使输出更平滑
+
                     
                     # 流式响应后添加换行
                     print("\n")
@@ -1064,6 +1041,16 @@ def main():
     )
 
     args = parser.parse_args()
+
+    # Configure logging only when running the CLI, never while importing tools.
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        handlers=[logging.FileHandler("fortune_teller.log", encoding="utf-8")],
+        force=True,
+    )
+    for name in ("boto3", "botocore", "urllib3", "s3transfer"):
+        logging.getLogger(name).setLevel(logging.ERROR)
 
     # Configure console logging if verbose mode is enabled
     if args.verbose:

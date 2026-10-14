@@ -7,9 +7,6 @@ import logging
 import boto3
 from typing import Dict, Any, Tuple, Generator
 
-# Configure logging
-logging.basicConfig(level=logging.INFO, 
-                    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger("AWSBedrockConnector")
 
 
@@ -108,10 +105,6 @@ class AWSBedrockConnector:
         logger.info("--- AWS BEDROCK REQUEST BEGIN ---")
         logger.info(f"MODEL: {self.model}")
         logger.info(f"REGION: {self.region}")
-        logger.info("SYSTEM PROMPT:")
-        logger.info(system_prompt)
-        logger.info("USER PROMPT:")
-        logger.info(user_prompt)
         logger.info("--- AWS BEDROCK REQUEST END ---")
         
         if self.client is None:
@@ -188,10 +181,6 @@ class AWSBedrockConnector:
         logger.info("--- AWS BEDROCK STREAMING REQUEST BEGIN ---")
         logger.info(f"MODEL: {self.model}")
         logger.info(f"REGION: {self.region}")
-        logger.info("SYSTEM PROMPT:")
-        logger.info(system_prompt)
-        logger.info("USER PROMPT:")
-        logger.info(user_prompt)
         logger.info("--- AWS BEDROCK STREAMING REQUEST END ---")
         
         if self.client is None:

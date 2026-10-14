@@ -7,9 +7,6 @@ import random
 import time
 from typing import Dict, Any, Tuple, Generator
 
-# Configure logging
-logging.basicConfig(level=logging.INFO, 
-                    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger("MockConnector")
 
 

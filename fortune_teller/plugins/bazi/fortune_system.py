@@ -6,6 +6,7 @@ import logging
 from typing import Dict, Any, List, Tuple
 
 from fortune_teller.core import BaseFortuneSystem
+from fortune_teller.calculators.bazi_converter import calculate_bazi
 
 # Configure logging
 logger = logging.getLogger("BaziFortuneSystem")
@@ -92,6 +93,9 @@ class BaziFortuneSystem(BaseFortuneSystem):
         print(f"出生日期: {birth_date}")
         print(f"出生时间: {birth_time}")
         print(f"出生地点: {location}")
+        print("排盘约定: 北京时间（UTC+08:00），按节气换月、立春换年，午夜换日；不校正真太阳时")
+        if processed_data.get("calculation", {}).get("assumed_noon"):
+            print("出生时间未知：年、月、日柱暂按中午计算，节气当日可能有歧义")
         print()
         
         # 显示八字四柱
@@ -323,22 +327,24 @@ class BaziFortuneSystem(BaseFortuneSystem):
         gender = validated_input["gender"]
         location = validated_input["location"]
         
-        # Calculate BaZi (eight characters)
-        year_stem, year_branch = self._get_year_pillar(birth_date.year)
-        month_stem, month_branch = self._get_month_pillar(
-            birth_date.year, birth_date.month
+        # Share the same solar-term calendar as the CLI calculator. Unknown
+        # times use noon for year/month/day and leave the hour pillar unknown.
+        clock = birth_time or datetime.time(12)
+        chart = calculate_bazi(
+            birth_date.year, birth_date.month, birth_date.day,
+            clock.hour, clock.minute, clock.second,
         )
-        day_stem, day_branch = self._get_day_pillar(
-            birth_date.year, birth_date.month, birth_date.day
-        )
-        
+        if not chart["success"]:
+            raise ValueError(chart["error"])
+        pillars = chart["detailed_pillars"]
+        year_stem, year_branch = pillars["year"]["stem"], pillars["year"]["branch"]
+        month_stem, month_branch = pillars["month"]["stem"], pillars["month"]["branch"]
+        day_stem, day_branch = pillars["day"]["stem"], pillars["day"]["branch"]
         if birth_time:
-            hour_stem, hour_branch = self._get_hour_pillar(
-                day_stem, birth_time.hour
-            )
+            hour_stem, hour_branch = pillars["hour"]["stem"], pillars["hour"]["branch"]
         else:
             hour_stem, hour_branch = None, None
-        
+
         # Construct pillars
         year_pillar = f"{year_stem}{year_branch}"
         month_pillar = f"{month_stem}{month_branch}"
@@ -383,6 +389,7 @@ class BaziFortuneSystem(BaseFortuneSystem):
         
         # Format the result
         processed_data = {
+            "calculation": {**chart["calculation"], "assumed_noon": birth_time is None},
             "birth_date": birth_date.strftime("%Y-%m-%d"),
             "birth_time": birth_time.strftime("%H:%M") if birth_time else "未知",
             "gender": gender,
@@ -482,6 +489,8 @@ class BaziFortuneSystem(BaseFortuneSystem):
 - 出生日期：{processed_data['birth_date']}
 - 出生时间：{processed_data['birth_time']}
 - 出生地点：{processed_data['location']}
+- 排盘约定：北京时间（UTC+08:00），节气换月、立春换年，午夜换日；不校正真太阳时
+- 未知时间是否暂按中午计算：{processed_data.get('calculation', {}).get('assumed_noon', False)}
 
 四柱八字：
 {four_pillars}
@@ -576,66 +585,3 @@ class BaziFortuneSystem(BaseFortuneSystem):
             "full_text": llm_response,
             "format_version": "1.0"
         }
-    
-    def _get_year_pillar(self, year: int) -> Tuple[str, str]:
-        """Calculate the Heavenly Stem and Earthly Branch for a year."""
-        # The cycle of stems and branches starts from 甲子 year (e.g., 1984)
-        stem_index = (year - 4) % 10
-        branch_index = (year - 4) % 12
-        
-        return self.HEAVENLY_STEMS[stem_index], self.EARTHLY_BRANCHES[branch_index]
-    
-    def _get_month_pillar(self, year: int, month: int) -> Tuple[str, str]:
-        """Calculate the Heavenly Stem and Earthly Branch for a month."""
-        # First get the year stem
-        year_stem, _ = self._get_year_pillar(year)
-        year_stem_index = self.HEAVENLY_STEMS.index(year_stem)
-        
-        # The month branch is straightforward
-        # Branch index is (month + 1) % 12, zero-indexed
-        # E.g., January (1) -> 子 (0)
-        branch_index = (month + 1) % 12
-        month_branch = self.EARTHLY_BRANCHES[branch_index]
-        
-        # The month stem depends on the year stem
-        # Each year stem corresponds to a different starting stem for the months
-        month_stem_base = (year_stem_index * 2) % 10
-        month_stem_index = (month_stem_base + month - 1) % 10
-        month_stem = self.HEAVENLY_STEMS[month_stem_index]
-        
-        return month_stem, month_branch
-    
-    def _get_day_pillar(self, year: int, month: int, day: int) -> Tuple[str, str]:
-        """Calculate the Heavenly Stem and Earthly Branch for a day."""
-        # This is a simplified algorithm and may not be 100% accurate
-        # For precise calculations, consider using a reference table or library
-        
-        # Calculate days since the start of the 60-day cycle (1900-01-31 was 甲子)
-        # This is a simplified calculation and may not be accurate for all dates
-        base_date = datetime.date(1900, 1, 31)
-        target_date = datetime.date(year, month, day)
-        days_diff = (target_date - base_date).days
-        
-        # Calculate stem and branch indices
-        stem_index = days_diff % 10
-        branch_index = days_diff % 12
-        
-        return self.HEAVENLY_STEMS[stem_index], self.EARTHLY_BRANCHES[branch_index]
-    
-    def _get_hour_pillar(self, day_stem: str, hour: int) -> Tuple[str, str]:
-        """Calculate the Heavenly Stem and Earthly Branch for an hour."""
-        # Convert hour to 0-23 range if needed
-        hour = hour % 24
-        
-        # Map hour to branch (each branch covers 2 hours)
-        branch_index = hour // 2
-        hour_branch = self.EARTHLY_BRANCHES[branch_index]
-        
-        # The hour stem depends on the day stem
-        day_stem_index = self.HEAVENLY_STEMS.index(day_stem)
-        # Each day has a base stem for the first hour
-        hour_stem_base = (day_stem_index * 2) % 10
-        hour_stem_index = (hour_stem_base + branch_index) % 10
-        hour_stem = self.HEAVENLY_STEMS[hour_stem_index]
-        
-        return hour_stem, hour_branch

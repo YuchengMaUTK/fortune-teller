@@ -35,7 +35,7 @@ cd fortune-teller
 
 # 2. Install dependencies
 python -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
+pip install '.[bedrock]'  # or openai / deepseek / anthropic / all
 
 # 3. Configure
 cp config.yaml.example config.yaml
@@ -162,3 +162,11 @@ MIT — see [LICENSE](LICENSE).
 ---
 
 **Ancient wisdom, modern plumbing. Enjoy.** ✨
+
+## Development and calendar conventions
+
+Python 3.10+ is required. Install `pip install '.[dev]'` and run offline tests with `python -m pytest`. Provider SDKs are optional; `requirements.txt` retains the full installation option.
+
+The BaZi plugin and CLI share the `lunar_python` calendar: years change at Li Chun and months at solar terms. Input is interpreted as China Standard Time (UTC+08:00), with the day pillar changing at midnight (sect 2) and the Zi hour starting at 23:00. Birthplace does not trigger timezone conversion or apparent solar-time correction. Convert overseas birth times to CST first. Unknown times use noon for year/month/day, leave the hour unknown, and can be ambiguous on solar-term dates.
+
+Real provider initialization failures produce errors. Use `provider: mock` explicitly for offline demos; output is labeled `[MOCK]`. Default tests never call paid services; run legacy online diagnostic scripts separately. Calculators live under `fortune_teller/calculators/`; `mcp/tools/` retains compatibility entry points.

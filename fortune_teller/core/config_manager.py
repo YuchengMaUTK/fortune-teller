@@ -8,9 +8,6 @@ import yaml
 import logging
 from typing import Dict, Any, Optional
 
-# Configure logging
-logging.basicConfig(level=logging.INFO, 
-                    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger("ConfigManager")
 
 
@@ -89,6 +86,7 @@ class ConfigManager:
             else:
                 logger.warning(f"No configuration file found at {self.config_file}, creating default configuration")
                 config = self._get_default_config()
+                self.config = config
                 self.save_config()
                 return config
         

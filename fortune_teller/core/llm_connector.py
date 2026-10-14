@@ -12,9 +12,6 @@ from typing import Dict, Any, Optional, List, Tuple, Callable, Generator, Iterat
 
 from .mock_connector import MockConnector
 
-# Configure logging
-logging.basicConfig(level=logging.INFO, 
-                    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger("LLMConnector")
 
 
@@ -42,7 +39,11 @@ class LLMConnector:
         self.cache = {}
 
         # Initialize the appropriate client based on the provider
-        self._initialize_client()
+        self.client = None
+        try:
+            self._initialize_client()
+        except Exception as exc:
+            logger.error("LLM client initialization failed: %s", exc)
 
         logger.info(f"LLM Connector initialized with provider: {self.provider}, model: {self.model}")
 
@@ -98,8 +99,10 @@ class LLMConnector:
             except Exception as e:
                 logger.error(f"AWS Bedrock connector initialization error: {str(e)}")
                 self.client = None
+        elif self.provider == "mock":
+            self.client = MockConnector()
         else:
-            logger.warning(f"Unsupported provider: {self.provider}. Using mock client.")
+            logger.warning(f"Unsupported provider: {self.provider}.")
             self.client = None
         
         # Final check to ensure client was properly initialized
@@ -125,10 +128,6 @@ class LLMConnector:
         logger.info("--- LLM REQUEST BEGIN ---")
         logger.info(f"PROVIDER: {self.provider}")
         logger.info(f"MODEL: {self.model}")
-        logger.info("SYSTEM PROMPT:")
-        logger.info(system_prompt)
-        logger.info("USER PROMPT:")
-        logger.info(user_prompt)
         logger.info("--- LLM REQUEST END ---")
         
         # Generate a cache key
@@ -139,39 +138,26 @@ class LLMConnector:
             logger.info("Using cached response")
             return self.cache[cache_key]
 
+        if self.provider not in {"openai", "deepseek", "anthropic", "aws_bedrock", "mock"}:
+            error = f"Unsupported LLM provider: {self.provider}"
+            return f"Error: {error}", {"error": error}
+        if self.client is None:
+            error = f"{self.provider} client not initialized; check credentials and provider dependencies"
+            return f"Error: {error}", {"error": error}
+
         try:
-            # Handle provider-specific cases
-            if self.provider == "openai":
-                if self.client is None:
-                    logger.warning("OpenAI client not initialized, falling back to mock connector")
-                    response = self._mock_response(system_prompt, user_prompt)
-                else:
-                    response = self._call_openai(system_prompt, user_prompt)
-            elif self.provider == "deepseek":
-                if self.client is None:
-                    logger.warning("DeepSeek client not initialized, falling back to mock connector")
-                    response = self._mock_response(system_prompt, user_prompt)
-                else:
-                    response = self._call_openai(system_prompt, user_prompt)
+            if self.provider in {"openai", "deepseek"}:
+                response = self._call_openai(system_prompt, user_prompt)
             elif self.provider == "anthropic":
-                if self.client is None:
-                    logger.warning("Anthropic client not initialized, falling back to mock connector")
-                    response = self._mock_response(system_prompt, user_prompt)
-                else:
-                    response = self._call_anthropic(system_prompt, user_prompt)
+                response = self._call_anthropic(system_prompt, user_prompt)
             elif self.provider == "aws_bedrock":
-                if self.client is None:
-                    logger.warning("AWS Bedrock client not initialized, falling back to mock connector")
-                    response = self._mock_response(system_prompt, user_prompt)
-                else:
-                    response = self.client.generate_response(system_prompt, user_prompt)
+                response = self.client.generate_response(system_prompt, user_prompt)
             else:
-                # Default to mock responses for unknown providers
-                logger.info(f"Using mock connector for provider: {self.provider}")
-                response = self._mock_response(system_prompt, user_prompt)
+                text, metadata = self._mock_response(system_prompt, user_prompt)
+                response = ("[MOCK] " + text, {**metadata, "mock": True})
 
             # Cache the response
-            if use_cache:
+            if use_cache and "error" not in response[1]:
                 self.cache[cache_key] = response
 
             return response
@@ -298,7 +284,11 @@ class LLMConnector:
         self.cache = {}
 
         # Re-initialize client
-        self._initialize_client()
+        self.client = None
+        try:
+            self._initialize_client()
+        except Exception as exc:
+            logger.error("LLM client initialization failed: %s", exc)
 
         logger.info(f"Provider changed to {provider}")
         return self.client is not None
@@ -333,103 +323,31 @@ class LLMConnector:
         logger.info("--- LLM STREAMING REQUEST BEGIN ---")
         logger.info(f"PROVIDER: {self.provider}")
         logger.info(f"MODEL: {self.model}")
-        logger.info("SYSTEM PROMPT:")
-        logger.info(system_prompt)
-        logger.info("USER PROMPT:")
-        logger.info(user_prompt)
         logger.info("--- LLM STREAMING REQUEST END ---")
         
+        if self.provider not in {"openai", "deepseek", "anthropic", "aws_bedrock", "mock"}:
+            yield f"Error: Unsupported LLM provider: {self.provider}"
+            return
+        if self.client is None:
+            yield f"Error: {self.provider} client not initialized; check credentials and provider dependencies"
+            return
+
         try:
-            # Handle provider-specific cases - check AWS first since that's what our config is using
             if self.provider == "aws_bedrock":
-                logger.info("Using AWS Bedrock streaming client")
-                if self.client is None:
-                    logger.warning("AWS Bedrock client not initialized, falling back to mock streaming")
-                    yield from self._mock_response_streaming(system_prompt, user_prompt)
-                elif hasattr(self.client, 'generate_response_streaming'):
-                    logger.info("AWS Bedrock client has streaming support, using it")
-                    yield from self.client.generate_response_streaming(system_prompt, user_prompt)
-                else:
-                    logger.warning("AWS Bedrock client doesn't support streaming, using mock streaming")
-                    yield from self._mock_response_streaming(system_prompt, user_prompt)
-            elif self.provider == "openai":
-                logger.info("Using OpenAI streaming client")
-                if self.client is None:
-                    logger.warning("OpenAI client not initialized, falling back to mock streaming")
-                    yield from self._mock_response_streaming(system_prompt, user_prompt)
-                else:
-                    yield from self._call_openai_streaming(system_prompt, user_prompt)
-            elif self.provider == "deepseek":
-                logger.info("Using DeepSeek streaming client")
-                if self.client is None:
-                    logger.warning("DeepSeek client not initialized, falling back to mock streaming")
-                    yield from self._mock_response_streaming(system_prompt, user_prompt)
-                else:
-                    yield from self._call_openai_streaming(system_prompt, user_prompt)
+                yield from self.client.generate_response_streaming(system_prompt, user_prompt)
+            elif self.provider in {"openai", "deepseek"}:
+                yield from self._call_openai_streaming(system_prompt, user_prompt)
             elif self.provider == "anthropic":
-                logger.info("Using Anthropic streaming client")
-                if self.client is None:
-                    logger.warning("Anthropic client not initialized, falling back to mock streaming")
-                    yield from self._mock_response_streaming(system_prompt, user_prompt)
-                else:
-                    yield from self._call_anthropic_streaming(system_prompt, user_prompt)
+                yield from self._call_anthropic_streaming(system_prompt, user_prompt)
             else:
-                # Default to mock streaming responses for unsupported providers
-                logger.info(f"Streaming not supported for provider: {self.provider}, using mock streaming")
-                yield from self._mock_response_streaming(system_prompt, user_prompt)
-                
+                text, _ = self._mock_response(system_prompt, user_prompt)
+                yield "[MOCK] " + text
+
         except Exception as e:
             logger.error(f"Error generating streaming LLM response: {e}")
             logger.error(f"Exception details: {str(e)}", exc_info=True)
             yield f"Error generating streaming response: {str(e)}"
             
-    def _mock_response_streaming(self, system_prompt: str, user_prompt: str) -> Generator[str, None, None]:
-        """
-        Generate a mock streaming response, simulating chunks being received over time.
-        
-        Args:
-            system_prompt: System prompt for the LLM
-            user_prompt: User prompt for the LLM
-            
-        Returns:
-            Generator yielding text chunks
-        """
-        logger.info("Using mock streaming response generator")
-        
-        # First get the complete response
-        mock = MockConnector()
-        full_response, _ = mock.generate_response(system_prompt, user_prompt)
-        
-        # Add a header indicating this is a mock response - send in two separate chunks
-        yield "【注意："
-        time.sleep(0.2)
-        yield "使用模拟流式输出】"
-        time.sleep(0.2)
-        yield "\n\n"
-        time.sleep(0.3)
-        
-        # First approach: Character by character with small batches
-        # This ensures we have many small chunks for debugging
-        response_chars = list(full_response)
-        
-        # Group into small chunks (2-5 characters)
-        batch_size_options = [1, 2, 3, 4, 5]
-        position = 0
-        
-        while position < len(response_chars):
-            # Vary the batch size for more realistic effect
-            batch_size = min(random.choice(batch_size_options), len(response_chars) - position)
-            
-            # Extract and yield the next chunk
-            current_chunk = ''.join(response_chars[position:position+batch_size])
-            yield current_chunk
-            
-            # Move position forward
-            position += batch_size
-            
-            # Random delay between chunks, increased for smoother reading experience
-            time.sleep(random.uniform(0.1, 0.2))  # Increased from 0.05-0.15 range
-                
     def generate_best_response(
         self, 
         system_prompt: str, 

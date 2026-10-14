@@ -1,12 +1,2 @@
-# Core dependencies
-pyyaml>=6.0
-python-dateutil>=2.8.0
-
-# LLM providers (optional — choose one)
-boto3>=1.28.0              # AWS Bedrock
-openai>=1.0.0              # OpenAI / DeepSeek (OpenAI-compatible)
-anthropic>=0.40.0          # Anthropic Messages API (Claude 3+)
-
-# Development and testing (optional)
-pytest>=7.0.0
-pytest-asyncio>=0.21.0
+# Backward-compatible full installation. For one provider, use pip install '.[bedrock]'
+.[all,dev]

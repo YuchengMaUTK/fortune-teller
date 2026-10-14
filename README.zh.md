@@ -35,7 +35,7 @@ cd fortune-teller
 
 # 2. 装依赖
 python -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
+pip install '.[bedrock]'  # 也可选 openai / deepseek / anthropic / all
 
 # 3. 配置
 cp config.yaml.example config.yaml
@@ -134,7 +134,7 @@ fortune_teller/
 │   └── zodiac/
 ├── tools/
 │   ├── llm_tool.py      # LLMTool 包装（读 config.yaml）
-│   └── mcp_tools.py     # 对 mcp/tools/*.py 的 subprocess 封装
+│   └── mcp_tools.py     # 对包内计算器的 subprocess 封装
 ├── ui/
 │   ├── keyboard_input.py # 方向键菜单，TTY 自适应
 │   ├── display.py        # 流式打印、头部、动画
@@ -143,7 +143,7 @@ fortune_teller/
     └── locales/         # en.json / zh.json
 ```
 
-仓库根目录下的 `mcp/tools/` 是纯 Python 的计算器脚本（八字四柱、抽牌、星座判定）；`tools/mcp_tools.py` 通过 subprocess 调用它们。
+`fortune_teller/calculators/` 包含纯 Python 计算器（八字四柱、抽牌、星座判定）；`tools/mcp_tools.py` 通过 subprocess 调用包内模块。仓库根目录的 `mcp/tools/` 保留兼容命令入口。
 
 ## 🤝 贡献
 
@@ -162,3 +162,11 @@ MIT — 详见 [LICENSE](LICENSE)。
 ---
 
 **古法遇新技，愿你玩得开心。** ✨
+
+## 开发与排盘约定
+
+需要 Python 3.10+。开发环境安装 `pip install '.[dev]'`，离线测试运行 `python -m pytest`。模型 SDK 是可选依赖；`requirements.txt` 保留完整安装方式。
+
+八字 CLI 和插件共用 `lunar_python` 历法：按立春换年、节气换月。输入时间按北京时间（UTC+08:00）解释，日柱午夜换日（sect 2），23 点进入子时；出生地点不参与时区转换或真太阳时校正。海外出生时间请先换算为北京时间。时间未知时暂用中午排年、月、日柱，时柱显示未知，节气当日可能有歧义。
+
+真实模型连接失败会显示错误。离线演示请显式配置 `provider: mock`，输出标记 `[MOCK]`。默认测试不调用付费服务；旧的在线诊断脚本需单独运行。计算器位于 `fortune_teller/calculators/`，`mcp/tools/` 保留旧命令兼容入口。
