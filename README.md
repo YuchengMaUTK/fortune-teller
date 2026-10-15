@@ -13,7 +13,31 @@
 
 **English | [中文](README.zh.md)**
 
-A terminal fortune telling app that combines classical divination systems with modern LLMs. Streamed readings, bilingual UI, arrow-key navigation.
+A terminal fortune telling app that combines classical divination systems with modern LLMs. Rich charts and streamed Markdown, Questionary menus, and a bilingual UI.
+
+## Terminal screenshots
+
+These are actual macOS Terminal screenshots of the CLI, using sample inputs in offline mock mode. Each screen is paused before the LLM reading starts; tarot cards are randomly drawn and will vary between runs.
+
+### BaZi: four pillars and five elements
+
+Enter a birth date, optional time, gender and birthplace. The chart shows the year, month, day and hour pillars, color-coded elements and their distribution. Times use China Standard Time; birthplace does not change the timezone.
+
+![BaZi chart in macOS Terminal](docs/images/terminal-bazi.png)
+
+### Tarot: a question and a card spread
+
+Enter a question, choose a spread and a topic, then review the drawn cards. Each panel shows its position, upright/reversed orientation and keywords. This example uses the past–present–future three-card spread.
+
+![Tarot spread in macOS Terminal](docs/images/terminal-tarot.png)
+
+### Zodiac: a concise sign overview
+
+Enter a birth date and a topic to see the sun sign, element, modality and ruling planet. Moon, rising and transit information uses simplified estimates; this is not a full astronomical birth chart.
+
+![Zodiac overview in macOS Terminal](docs/images/terminal-zodiac.png)
+
+Press Enter after the chart to generate a reading, then continue with follow-up questions. Rich formats the streamed Markdown; Questionary handles menus and validated input.
 
 ## 🌟 Features
 
@@ -66,7 +90,7 @@ llm:
   model: us.anthropic.claude-sonnet-4-5-20250929-v1:0
   region: us-west-2
   temperature: 0.7
-  max_tokens: 2000
+  max_tokens: 6000
   # profile: my-profile    # optional named ~/.aws profile
 ```
 
@@ -143,7 +167,7 @@ fortune_teller/
     └── locales/         # en.json / zh.json
 ```
 
-`mcp/tools/` at the repo root contains the pure-Python calculators for BaZi pillars, tarot draws, and zodiac signs; they're CLI scripts that `tools/mcp_tools.py` shells out to.
+`fortune_teller/calculators/` contains the packaged Python calculators for BaZi pillars, tarot draws and zodiac signs. `tools/mcp_tools.py` invokes them as subprocesses; `mcp/tools/` retains compatibility entry points.
 
 ## 🤝 Contributing
 
@@ -170,3 +194,22 @@ Python 3.10+ is required. Install `pip install '.[dev]'` and run offline tests w
 The BaZi plugin and CLI share the `lunar_python` calendar: years change at Li Chun and months at solar terms. Input is interpreted as China Standard Time (UTC+08:00), with the day pillar changing at midnight (sect 2) and the Zi hour starting at 23:00. Birthplace does not trigger timezone conversion or apparent solar-time correction. Convert overseas birth times to CST first. Unknown times use noon for year/month/day, leave the hour unknown, and can be ambiguous on solar-term dates.
 
 Real provider initialization failures produce errors. Use `provider: mock` explicitly for offline demos; output is labeled `[MOCK]`. Default tests never call paid services; run legacy online diagnostic scripts separately. Calculators live under `fortune_teller/calculators/`; `mcp/tools/` retains compatibility entry points.
+
+## Terminal interface
+
+Rich renders responsive BaZi tables, tarot card panels, zodiac summaries and Markdown readings. Questionary provides validated input and arrow-key menus: ↑↓ to navigate, Enter to select, q or Esc to return.
+
+Interactive streams keep completed Markdown paragraphs in scrollback and preview the current paragraph. Pipes and redirected output retain numbered menus and raw incremental text without ANSI colors or cursor redraws. `--output reading.json` saves the actual completed response.
+
+Try all three screens without API credentials:
+
+```bash
+cp config.yaml.mock demo.yaml
+python -m fortune_teller --config demo.yaml --lang zh --system bazi
+python -m fortune_teller --config demo.yaml --lang zh --system tarot
+python -m fortune_teller --config demo.yaml --lang zh --system zodiac
+```
+
+Configuration filenames must end in `.yaml`, `.yml` or `.json`. Mock mode is explicitly labeled and makes no LLM calls. For real readings, configure a provider above; `max_tokens: 6000` gives longer readings more room, though the required budget varies by model and prompt.
+
+Export a reading with `python -m fortune_teller --config config.yaml --output reading.json`. Use `NO_COLOR=1` to disable colors.

@@ -24,6 +24,8 @@ from fortune_teller.ui.display import (
     print_followup_result_streaming
 )
 from fortune_teller.ui.animation import LoadingAnimation
+from fortune_teller.ui.rendering import heading, markdown, stream_markdown, message
+from fortune_teller.ui.keyboard_input import ask_text
 
 # 应用专用的日志配置
 logger = logging.getLogger("FortuneTeller")
@@ -455,7 +457,7 @@ def run_interactive_menu(fortune_teller, args):
                 }
                 
                 # Confirm to proceed
-                input(f"\n{Colors.CYAN}{t('prompt_continue_to_reading', lang)}{Colors.ENDC}")
+                ask_text(t("prompt_continue_to_reading", lang))
 
             except Exception as e:
                 print(f"{Colors.RED}{t('error_processing_data', lang).format(msg=str(e))}{Colors.ENDC}")
@@ -464,19 +466,10 @@ def run_interactive_menu(fortune_teller, args):
             # Generate LLM prompts from the stored processed data
             prompts = system.generate_llm_prompt(processed_data)
             
-            # Save the result if output specified
+            # Save only after a response arrives, so streaming exports contain
+            # the actual reading rather than an empty placeholder.
             output_path = None
-            if args.output:
-                # Create empty result structure to be populated
-                empty_result = {
-                    "metadata": {
-                        "system_name": system.name,
-                        "timestamp": datetime.datetime.now().isoformat(),
-                        "inputs": {k: str(v) for k, v in inputs.items()}
-                    }
-                }
-                output_path = fortune_teller.save_reading(empty_result, args.output)
-            
+
             # Show loading animation while we wait for the first token.
             animation = LoadingAnimation("正在连接大语言模型，解析命理")
             animation.start()
@@ -487,13 +480,20 @@ def run_interactive_menu(fortune_teller, args):
                     """Stream handler. Keeps the spinner running until the
                     first real chunk arrives (print_reading_result_streaming
                     stops it via pending_animation)."""
-                    return print_reading_result_streaming(
-                        response_generator,
-                        output_path,
-                        start_time=start_time,
-                        pending_animation=animation,
+                    text = print_reading_result_streaming(
+                        response_generator, start_time=start_time, pending_animation=animation,
                     )
-                
+                    if args.output and text.strip() and not text.lstrip().startswith("Error"):
+                        result = system.format_result(text)
+                        result["metadata"] = {
+                            "system_name": system.name,
+                            "timestamp": datetime.datetime.now().isoformat(),
+                            "inputs": {k: str(v) for k, v in inputs.items()},
+                        }
+                        path = fortune_teller.save_reading(result, args.output)
+                        message(f"✓ 结果已保存到: {path}")
+                    return text
+
                 def handle_standard(response, metadata):
                     """标准输出处理函数"""
                     # Format the result using the system variable from parent scope
@@ -613,13 +613,14 @@ def run_chat_mode(fortune_teller, system_name=None):
         animation.stop()
         
         # Display the greeting
-        print(f"\n{Colors.GREEN}霄占: {Colors.ENDC}{response.strip()}\n")
+        heading("霄占")
+        markdown(response.strip())
         
         # Chat loop
         chat_context = []  # Store recent chat history
         while True:
             # Get user input
-            user_input = input(f"{Colors.YELLOW}您: {Colors.ENDC}")
+            user_input = ask_text("您")
             
             # Check for exit command
             if user_input.lower().strip() in ["exit", "quit", "退出", "q"]:
@@ -647,85 +648,26 @@ def run_chat_mode(fortune_teller, system_name=None):
             
                 
             try:
-                # 定义聊天的处理函数
-                def handle_chat_streaming(response_generator, start_time, thinking_anim):
-                    """聊天流式输出处理函数"""
-                    # Use animation and chat_context from parent scope directly
-                    # Stop main animation (the loading one)
-                    animation.stop()
-                    
-                    # 显示流式结果并测量首个块延迟
-                    complete_response = ""
-                    chunk_count = 0
-                    first_chunk_time = None
-                    
-                    for chunk in response_generator:
-                        # 记录首个块时间
-                        if chunk_count == 0:
-                            # 停止思考动画，它会自动显示霄占: 前缀
-                            thinking_anim.stop()
-                            
-                            first_chunk_time = time.time()
-                            latency = first_chunk_time - start_time
-                            logger.info(f"聊天首个块延迟: {latency:.3f}秒")
-                        
-                        # 跳过空块
-                        if not chunk or chunk.strip() == "":
-                            continue
-                            
-                        chunk_count += 1
-                        
-                        # 打印块并刷新
-                        sys.stdout.write(chunk)
-                        sys.stdout.flush()
-                        
-                        # 添加到完整响应
-                        complete_response += chunk
-                        
-                        # 适当延迟以确保更流畅的阅读体验
-
-                    
-                    # 流式响应后添加换行
-                    print("\n")
-                    return complete_response
-                
-                def handle_chat_standard(response, metadata, thinking_anim):
-                    """聊天标准输出处理函数"""
-                    # Use animation directly from parent scope
-                    # 停止所有动画
-                    animation.stop()
-                    thinking_anim.stop()
-                    
-                    # 显示响应 (思考动画停止后会自动显示霄占: 前缀)
-                    print(f"{response.strip()}\n")
-                    return response
-                
-                # 在调用前导入并初始化思考动画
-                from fortune_teller.ui.thinking_animation import ChatThinkingAnimation
-                
-                # 先完全停止主动画，确保它不再显示任何内容
-                animation.stop()
-                
-                # 清除现有输出行，确保没有残留动画文本
-                sys.stdout.write("\r" + " " * 60 + "\r") 
-                sys.stdout.flush()
-                
-                # 等待一小段时间确保主动画完全停止
-                time.sleep(0.1)
-                
-                # 显示即时反馈（在API调用前）
-                thinking_animation = ChatThinkingAnimation(prefix="")
-                print(f"\n{Colors.GREEN}霄占: {Colors.ENDC}", end="", flush=True)
+                thinking_animation = LoadingAnimation("霄占正在思考…")
                 thinking_animation.start()
-                
-                # 使用统一的API生成响应
-                response = fortune_teller.llm_connector.generate_best_response(
-                    fortune_teller._localized_system_prompt(system_prompt),
-                    chat_prompt,
-                    streaming_handler=lambda gen, st: handle_chat_streaming(gen, st, thinking_animation),
-                    non_streaming_handler=lambda resp, meta: handle_chat_standard(resp, meta, thinking_animation)
-                )
-                
+                def handle_chat_streaming(generator, start_time):
+                    return stream_markdown(generator, "霄占", thinking_animation, start_time)
+
+                def handle_chat_standard(text, metadata):
+                    thinking_animation.stop()
+                    heading("霄占")
+                    markdown(text)
+                    return text
+
+                try:
+                    response = fortune_teller.llm_connector.generate_best_response(
+                        fortune_teller._localized_system_prompt(system_prompt), chat_prompt,
+                        streaming_handler=handle_chat_streaming,
+                        non_streaming_handler=handle_chat_standard,
+                    )
+                finally:
+                    thinking_animation.stop()
+
                 # 将响应添加到聊天上下文
                 chat_context.append(f"霄占: {response.strip()}")
                 

@@ -20,67 +20,9 @@ class TarotFortuneSystem(BaseFortuneSystem):
     """
     
     def display_processed_data(self, processed_data: Dict[str, Any]) -> None:
-        """
-        Display processed tarot data (cards drawn and their positions).
-        
-        Args:
-            processed_data: Processed tarot reading data
-        """
-        from fortune_teller.ui.colors import Colors
-        
-        # 获取基本信息
-        question = processed_data.get("question", "未知")
-        focus_area = processed_data.get("focus_area", "未知")
-        name = processed_data.get("name", "匿名")
-        spread_info = processed_data.get("spread", {})
-        reading = processed_data.get("reading", [])
-        
-        # 显示标题
-        print(f"\n{Colors.BOLD}{Colors.YELLOW}✨ 塔罗牌阵信息 ✨{Colors.ENDC}")
-        print(f"{Colors.CYAN}" + "=" * 60 + f"{Colors.ENDC}\n")
-        
-        # 显示基本信息
-        print(f"{Colors.BOLD}【咨询信息】{Colors.ENDC}")
-        print(f"咨询者: {name}")
-        print(f"问题: {question}")
-        print(f"领域: {focus_area}")
-        print()
-        
-        # 显示牌阵信息
-        print(f"{Colors.BOLD}【牌阵】{Colors.ENDC}")
-        print(f"名称: {spread_info.get('name', '未知')}")
-        print(f"描述: {spread_info.get('description', '未知')}")
-        print()
-        
-            # 显示抽取的牌
-        print(f"{Colors.BOLD}【抽取的牌】{Colors.ENDC}")
-        for i, card in enumerate(reading, 1):
-            position = card.get("position", f"位置 {i}")
-            card_name = card.get("card", "未知")
-            orientation = card.get("orientation", "正位")
-            
-            # 查找牌的emoji
-            card_emoji = ""
-            for card_data in self.cards:
-                if card_data["name"] == card_name and "emoji" in card_data:
-                    card_emoji = card_data["emoji"]
-                    break
-                    
-            # 使用不同颜色表示正逆位
-            orientation_color = Colors.GREEN if orientation == "正位" else Colors.RED
-            orientation_emoji = "⬆️ " if orientation == "正位" else "⬇️ "
-            
-            print(f"{i}. {Colors.YELLOW}{position}{Colors.ENDC}: "
-                  f"{Colors.BOLD}{card_name}{Colors.ENDC} {card_emoji} "
-                  f"({orientation_color}{orientation} {orientation_emoji}{Colors.ENDC})")
-            
-            # 显示关键词
-            keywords = card.get("keywords", [])
-            if keywords:
-                print(f"   关键词: {Colors.CYAN}{', '.join(keywords)}{Colors.ENDC}")
-        
-        print(f"\n{Colors.CYAN}" + "-" * 60 + f"{Colors.ENDC}")
-    
+        from fortune_teller.ui.rendering import display_chart
+        display_chart("tarot", processed_data)
+
     def get_chat_system_prompt(self) -> str:
         """
         Get a system prompt for chat mode specific to Tarot system.

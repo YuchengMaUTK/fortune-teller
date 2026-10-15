@@ -30,3 +30,13 @@ ELEMENT_COLORS = {
     "金": Colors.BOLD,
     "水": Colors.BLUE
 }
+
+# Legacy callers remain escape-free in pipes and respect NO_COLOR. New screens
+# use Rich's terminal detection and theme instead of manual ANSI sequences.
+import os
+import sys
+if not sys.stdout.isatty() or "NO_COLOR" in os.environ:
+    for _name in vars(Colors).copy():
+        if _name.isupper():
+            setattr(Colors, _name, "")
+    ELEMENT_COLORS = {element: "" for element in ELEMENT_COLORS}

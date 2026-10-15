@@ -1,531 +1,126 @@
-"""
-Display functions for the Fortune Teller command-line application.
-"""
+"""CLI screens and input collection built on the shared Rich renderer."""
 import datetime
-import sys
-import logging
-import time
-import re
-from typing import Dict, Any, List, Generator
+from typing import Any, Dict, List
 
-from fortune_teller.ui.colors import Colors, ELEMENT_COLORS
-from fortune_teller.core import BaseFortuneSystem
+from rich.table import Table
+from rich.text import Text
+
+from .keyboard_input import ask_text, pick_from_list
+from .rendering import (display_chart, get_console, heading, markdown, message,
+                        stream_markdown, welcome)
+
 
 def print_welcome_screen():
-    """Display a welcome screen with ASCII art and information."""
-    # Chinese art title for 霄占
-    xiao_zhan_ascii = """
-    ██╗  ██╗██╗ █████╗  ██████╗      ███████╗██╗  ██╗ █████╗ ███╗   ██╗
-    ╚██╗██╔╝██║██╔══██╗██╔═══██╗     ╚══███╔╝██║  ██║██╔══██╗████╗  ██║
-     ╚███╔╝ ██║███████║██║   ██║       ███╔╝ ███████║███████║██╔██╗ ██║
-     ██╔██╗ ██║██╔══██║██║   ██║      ███╔╝  ██╔══██║██╔══██║██║╚██╗██║
-    ██╔╝ ██╗██║██║  ██║╚██████╔╝     ███████╗██║  ██║██║  ██║██║ ╚████║
-    ╚═╝  ╚═╝╚═╝╚═╝  ╚═╝ ╚═════╝      ╚══════╝╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝
-    """
-    
-    print(f"{Colors.CYAN}{xiao_zhan_ascii}{Colors.ENDC}")
-    
-    print(f"{Colors.BOLD}欢迎使用 {Colors.YELLOW}霄占 (Fortune Teller){Colors.ENDC}{Colors.BOLD} 命理解析系统{Colors.ENDC}")
-    print(f"{Colors.CYAN}✨ 古今命理，尽在掌握 ✨{Colors.ENDC}")
-    print("\n" + "=" * 80 + "\n")
+    welcome()
 
 
 def print_llm_info(config: Dict[str, Any]):
-    """
-    Print information about the current LLM model.
-    
-    Args:
-        config: LLM configuration dictionary
-    """
+    names = {"aws_bedrock": "AWS Bedrock", "openai": "OpenAI", "anthropic": "Anthropic",
+             "deepseek": "DeepSeek", "mock": "模拟模式"}
     provider = config.get("provider", "未知")
-    model = config.get("model", "未知")
-    
+    message(f"模型 · {names.get(provider, provider)} / {config.get('model', '未知')}", "accent")
     if provider == "mock":
-        provider_name = "模拟模式"
-        model_name = "测试模型"
-        status = f"{Colors.YELLOW}⚠️ 当前为测试模式，解读结果不具参考价值{Colors.ENDC}"
-    elif provider == "aws_bedrock":
-        provider_name = "AWS Bedrock"
-        model_name = model
-        status = f"{Colors.GREEN}✓ 大语言模型已连接，系统准备就绪{Colors.ENDC}"
-    elif provider == "openai":
-        provider_name = "OpenAI"
-        model_name = model
-        status = f"{Colors.GREEN}✓ 大语言模型已连接，系统准备就绪{Colors.ENDC}"
-    elif provider == "anthropic":
-        provider_name = "Anthropic"
-        model_name = model
-        status = f"{Colors.GREEN}✓ 大语言模型已连接，系统准备就绪{Colors.ENDC}"
+        message("离线演示模式 · 输出为模拟解读", "warning")
     else:
-        provider_name = provider
-        model_name = model
-        status = f"{Colors.YELLOW}? 未知状态{Colors.ENDC}"
-    
-    print(f"🧠 当前使用的大语言模型: {Colors.GREEN}{provider_name} ({model_name}){Colors.ENDC}")
-    print(f"📡 连接状态: {status}")
-    print("\n" + "=" * 80)
+        # Configuration alone cannot prove connectivity; the real request does.
+        message("模型已配置 · 生成解读时连接服务", "muted")
 
 
-def print_available_systems(systems: List[Dict[str, Any]]) -> None:
-    """
-    Print information about available fortune telling systems.
-    
-    Args:
-        systems: List of fortune system information dictionaries
-    """
-    print(f"\n{Colors.BOLD}{Colors.YELLOW}✨ 可用的占卜系统 ✨{Colors.ENDC}")
-    print(f"{Colors.CYAN}" + "-" * 60 + f"{Colors.ENDC}")
-    
-    # 为不同的占卜系统添加独特的图标
-    system_icons = {
-        "bazi": "🀄",  
-        "tarot": "🃏",
-        "zodiac": "⭐",
-    }
-    
-    for i, system in enumerate(systems, 1):
-        system_name = system['name']
-        icon = system_icons.get(system_name, "📜")
-        
-        print(f"{Colors.GREEN}{i}.{Colors.ENDC} {Colors.BOLD}{icon} {system['display_name']}{Colors.ENDC} ({system_name})")
-        print(f"   {Colors.CYAN}描述:{Colors.ENDC} {system['description']}")
-        print(f"{Colors.CYAN}" + "-" * 40 + f"{Colors.ENDC}")
+def print_available_systems(systems: List[Dict[str, Any]]):
+    table = Table(title="可用的占卜系统", border_style="border")
+    table.add_column("系统", style="title")
+    table.add_column("名称")
+    table.add_column("简介")
+    for system in systems:
+        table.add_row(Text(system['name']), Text(system['display_name']), Text(system['description']))
+    get_console().print(table)
 
 
-def display_eight_characters(processed_data: Dict[str, Any]):
-    """
-    Display formatted eight characters and five elements info.
-    
-    Args:
-        processed_data: Processed BaZi data dictionary
-    """
-    # 获取基础信息
-    gender = processed_data.get("gender", "未知")
-    birth_date = processed_data.get("birth_date", "未知")
-    birth_time = processed_data.get("birth_time", "未知")
-    location = processed_data.get("location", "未知")
-    
-    # 获取四柱八字信息
-    four_pillars = processed_data.get("four_pillars", {})
-    year_pillar = four_pillars.get("year", "")
-    month_pillar = four_pillars.get("month", "")
-    day_pillar = four_pillars.get("day", "")
-    hour_pillar = four_pillars.get("hour", "")
-    
-    # 获取年柱信息
-    year_data = processed_data.get("year_pillar", {})
-    year_stem = year_data.get("stem", "")
-    year_branch = year_data.get("branch", "")
-    year_stem_element = year_data.get("stem_element", "")
-    year_branch_element = year_data.get("branch_element", "")
-    
-    # 获取月柱信息
-    month_data = processed_data.get("month_pillar", {})
-    month_stem = month_data.get("stem", "")
-    month_branch = month_data.get("branch", "")
-    month_stem_element = month_data.get("stem_element", "")
-    month_branch_element = month_data.get("branch_element", "")
-    
-    # 获取日柱信息
-    day_data = processed_data.get("day_pillar", {})
-    day_stem = day_data.get("stem", "")
-    day_branch = day_data.get("branch", "")
-    day_stem_element = day_data.get("stem_element", "")
-    day_branch_element = day_data.get("branch_element", "")
-    
-    # 获取时柱信息
-    hour_data = processed_data.get("hour_pillar", {})
-    if hour_data:
-        hour_stem = hour_data.get("stem", "")
-        hour_branch = hour_data.get("branch", "")
-        hour_stem_element = hour_data.get("stem_element", "")
-        hour_branch_element = hour_data.get("branch_element", "")
+def display_eight_characters(processed_data):
+    display_chart("bazi", processed_data)
+
+
+def print_reading_result(result: Dict[str, Any], output_path=None):
+    heading("命理解读")
+    text = result.get("full_text")
+    if text is not None:
+        markdown(text)
     else:
-        hour_stem = hour_branch = hour_stem_element = hour_branch_element = "未知"
-    
-    # 获取五行统计
-    elements_data = processed_data.get("elements", {})
-    element_counts = elements_data.get("counts", {})
-    strongest = elements_data.get("strongest", "未知")
-    weakest = elements_data.get("weakest", "未知")
-    
-    # 获取日主信息
-    day_master_data = processed_data.get("day_master", {})
-    day_master = day_master_data.get("character", "")
-    day_master_element = day_master_data.get("element", "")
-    relationships = day_master_data.get("relationships", {})
-    
-    # 显示标题
-    print(f"\n{Colors.BOLD}{Colors.YELLOW}✨ 八字命盘信息 ✨{Colors.ENDC}")
-    print(f"{Colors.CYAN}" + "=" * 60 + f"{Colors.ENDC}\n")
-    
-    # 显示基本信息
-    print(f"{Colors.BOLD}【基本信息】{Colors.ENDC}")
-    print(f"性别: {gender}")
-    print(f"出生日期: {birth_date}")
-    print(f"出生时间: {birth_time}")
-    print(f"出生地点: {location}")
-    print()
-    
-    # 显示八字四柱
-    print(f"{Colors.BOLD}【四柱八字】{Colors.ENDC}")
-    print(f"      {Colors.YELLOW}年柱{Colors.ENDC}         {Colors.YELLOW}月柱{Colors.ENDC}         {Colors.YELLOW}日柱{Colors.ENDC}         {Colors.YELLOW}时柱{Colors.ENDC}")
-    
-    # 显示天干
-    stem_line = "天干:  "
-    for stem, element in [(year_stem, year_stem_element), 
-                         (month_stem, month_stem_element), 
-                         (day_stem, day_stem_element), 
-                         (hour_stem, hour_stem_element)]:
-        color = ELEMENT_COLORS.get(element, Colors.ENDC)
-        stem_line += f"{color}{stem}{Colors.ENDC} ({element})      "
-    print(stem_line)
-    
-    # 显示地支
-    branch_line = "地支:  "
-    for branch, element in [(year_branch, year_branch_element), 
-                           (month_branch, month_branch_element), 
-                           (day_branch, day_branch_element), 
-                           (hour_branch, hour_branch_element)]:
-        color = ELEMENT_COLORS.get(element, Colors.ENDC)
-        branch_line += f"{color}{branch}{Colors.ENDC} ({element})      "
-    print(branch_line)
-    print()
-    
-    # 显示五行统计
-    print(f"{Colors.BOLD}【五行统计】{Colors.ENDC}")
-    elements_line = ""
-    for element, count in element_counts.items():
-        color = ELEMENT_COLORS.get(element, Colors.ENDC)
-        elements_line += f"{color}{element}{Colors.ENDC}: {count}  "
-    print(elements_line)
-    
-    # 显示最强最弱五行
-    print(f"最强五行: {ELEMENT_COLORS.get(strongest, Colors.ENDC)}{strongest}{Colors.ENDC}")
-    print(f"最弱五行: {ELEMENT_COLORS.get(weakest, Colors.ENDC)}{weakest}{Colors.ENDC}")
-    print()
-    
-    # 显示日主信息
-    print(f"{Colors.BOLD}【日主】{Colors.ENDC}")
-    print(f"日主: {ELEMENT_COLORS.get(day_master_element, Colors.ENDC)}{day_master}{Colors.ENDC} ({day_master_element})")
-    
-    # 显示五行关系
-    print(f"{Colors.BOLD}【五行关系】{Colors.ENDC}")
-    for element, relationship in relationships.items():
-        print(f"{ELEMENT_COLORS.get(day_master_element, Colors.ENDC)}{day_master_element}{Colors.ENDC} 与 {ELEMENT_COLORS.get(element, Colors.ENDC)}{element}{Colors.ENDC}: {relationship}")
-    
-    print(f"\n{Colors.CYAN}" + "-" * 60 + f"{Colors.ENDC}")
+        for section, content in result.get("reading", result.get("analysis", {})).items():
+            heading(section)
+            markdown(str(content))
+    _completion(text or "", output_path)
 
 
-def print_reading_result(result: Dict[str, Any], output_path: str = None):
-    """
-    Print the fortune reading result to the console.
-    
-    Args:
-        result: Reading results dictionary
-        output_path: Path where the result was saved (optional)
-    """
-    # Show success message
-    print(f"\n{Colors.GREEN}✓ 解读生成完成！{Colors.ENDC}\n")
-    
-    # Show output path if provided
-    if output_path:
-        print(f"{Colors.GREEN}✓ 结果已保存到:{Colors.ENDC} {output_path}\n")
-    
-    # Display the result
-    print(f"\n{Colors.BOLD}{Colors.YELLOW}✨ 命理解读结果 ✨{Colors.ENDC}")
-    print(f"{Colors.CYAN}" + "=" * 60 + f"{Colors.ENDC}\n")
-    
-    # Print the formatted sections
-    reading_sections = result.get("reading", result.get("analysis", {}))
-    for section, content in reading_sections.items():
-        print(f"{Colors.BOLD}{Colors.GREEN}【 {section} 】{Colors.ENDC}\n")
-        print(f"{content}")
-        print(f"\n{Colors.CYAN}" + "-" * 40 + f"{Colors.ENDC}\n")
-
-def print_reading_result_streaming(
-    result_generator: Generator[str, None, None],
-    output_path: str = None,
-    start_time: float = None,
-    pending_animation=None,
-) -> str:
-    """Print a streaming fortune reading.
-
-    Args:
-        result_generator: Generator yielding text chunks.
-        output_path: Path where the result will be saved (optional).
-        start_time: Timestamp when the API call was initiated (for latency).
-        pending_animation: Optional LoadingAnimation that should keep spinning
-            until the first non-empty chunk arrives (first-token latency).
-
-    Returns:
-        The complete response text.
-    """
-    chunk_logger = logging.getLogger("StreamingChunks")
-    chunk_logger.setLevel(logging.DEBUG)
-    if not chunk_logger.handlers:
-        chunk_handler = logging.FileHandler('streaming_chunks.log')
-        chunk_handler.setFormatter(logging.Formatter('%(asctime)s - %(message)s'))
-        chunk_logger.addHandler(chunk_handler)
-    chunk_logger.info("=== START OF STREAMING SESSION ===")
-
-    complete_response = ""
-    chunk_count = 0
-    header_printed = False
-    json_start_pattern = re.compile(r'^\s*\{')
-    json_mode_detected = False
-    first_chunk_time = None
-
-    def _finish_pending():
-        """Stop the pending animation and print the reading header."""
-        nonlocal header_printed
-        if pending_animation is not None:
-            pending_animation.stop()
-        if not header_printed:
-            print(f"\n{Colors.GREEN}✨ 正在生成解读 ✨{Colors.ENDC}\n")
-            print(f"{Colors.CYAN}" + "=" * 60 + f"{Colors.ENDC}\n")
-            header_printed = True
-
-    try:
-        for chunk in result_generator:
-            if chunk_count == 0 and start_time:
-                first_chunk_time = time.time()
-                latency = first_chunk_time - start_time
-                chunk_logger.info(f"⏱️ 首个块延迟: {latency:.3f}秒")
-
-            chunk_count += 1
-
-            if not chunk or chunk.strip() == "":
-                continue
-
-            # First real chunk — stop the spinner and print header.
-            _finish_pending()
-                
-            # Log each chunk with details
-            chunk_repr = repr(chunk)
-            chunk_logger.info(f"Chunk #{chunk_count} received | Length: {len(chunk)} | Content: {chunk_repr}")
-            
-            # Try to detect if we're receiving raw JSON and handle it appropriately
-            if chunk_count <= 2 and json_start_pattern.match(chunk):
-                json_mode_detected = True
-                chunk_logger.warning("Detected JSON format in streaming output - will filter")
-                # Don't print raw JSON to console
-                complete_response += chunk
-                continue
-                
-            # Skip chunks that look like JSON objects/fragments in JSON mode
-            if json_mode_detected and (chunk.startswith('{') or chunk.startswith('"type":')):
-                chunk_logger.info(f"Skipping JSON fragment: {chunk[:30]}...")
-                complete_response += chunk
-                continue
-            
-            # Strip any JSON formatting from text chunks
-            clean_chunk = chunk
-            
-            # Print chunk and force flush to show immediately
-            sys.stdout.write(clean_chunk)
-            sys.stdout.flush()
-
-            complete_response += clean_chunk
-    except KeyboardInterrupt:
-        _finish_pending()
-        print(f"\n\n{Colors.RED}解读生成已被中断{Colors.ENDC}")
-    except Exception as e:
-        _finish_pending()
-        print(f"\n\n{Colors.RED}解读生成出错: {e}{Colors.ENDC}")
-    finally:
-        # Guarantee the spinner is stopped even if we never got a chunk.
-        if pending_animation is not None:
-            pending_animation.stop()
-
-    # Print footer
-    print(f"\n\n{Colors.CYAN}" + "=" * 60 + f"{Colors.ENDC}")
-    
-    # Show success message
-    print(f"\n{Colors.GREEN}✓ 解读生成完成！{Colors.ENDC}")
-    
-    # Show output path if provided
-    if output_path:
-        print(f"{Colors.GREEN}✓ 结果已保存到:{Colors.ENDC} {output_path}")
-    
-    return complete_response
+def _completion(text, output_path=None):
+    if not text.strip():
+        message("未收到解读内容，请检查模型连接。", "warning")
+    elif text.lstrip().startswith(("Error:", "Error during", "Error generating")):
+        message("解读未完成，请检查模型连接。", "error")
+    else:
+        message("✓ 解读生成完成！", "success")
+        if output_path:
+            message(f"✓ 结果已保存到: {output_path}", "muted")
 
 
-def print_followup_result(topic: str, content: str):
-    """
-    Print the followup reading result to the console.
-    
-    Args:
-        topic: The topic of the followup reading
-        content: The content of the followup reading
-    """
-    print(f"\n{Colors.BOLD}{Colors.YELLOW}✨ {topic}详解 ✨{Colors.ENDC}")
-    print(f"{Colors.CYAN}" + "=" * 60 + f"{Colors.ENDC}\n")
-    
-    print(content)
-    print(f"\n{Colors.CYAN}" + "-" * 40 + f"{Colors.ENDC}\n")
+def print_reading_result_streaming(result_generator, output_path=None, start_time=None, pending_animation=None):
+    text = stream_markdown(result_generator, "✨ 正在生成解读 ✨", pending_animation, start_time)
+    _completion(text, output_path)
+    return text
 
 
-def print_followup_result_streaming(
-    topic: str,
-    result_generator: Generator[str, None, None],
-    pending_animation=None,
-) -> str:
-    """Print a streaming follow-up reading.
-
-    Args:
-        topic: The topic name.
-        result_generator: Generator yielding text chunks.
-        pending_animation: Optional LoadingAnimation that should keep
-            spinning until the first non-empty chunk arrives.
-    """
-    chunk_logger = logging.getLogger("StreamingChunks")
-    chunk_logger.setLevel(logging.DEBUG)
-    if not chunk_logger.handlers:
-        chunk_handler = logging.FileHandler('streaming_chunks.log')
-        chunk_handler.setFormatter(logging.Formatter('%(asctime)s - %(message)s'))
-        chunk_logger.addHandler(chunk_handler)
-    chunk_logger.info(f"=== START OF STREAMING SESSION FOR TOPIC: {topic} ===")
-
-    complete_response = ""
-    chunk_count = 0
-    header_printed = False
-
-    def _finish_pending():
-        nonlocal header_printed
-        if pending_animation is not None:
-            pending_animation.stop()
-        if not header_printed:
-            print(f"\n{Colors.BOLD}{Colors.YELLOW}✨ {topic}详解 ✨{Colors.ENDC}")
-            print(f"{Colors.CYAN}" + "=" * 60 + f"{Colors.ENDC}\n")
-            header_printed = True
-
-    try:
-        for chunk in result_generator:
-            chunk_count += 1
-            if not chunk or chunk.strip() == "":
-                continue
-
-            _finish_pending()
-            chunk_logger.info(f"Topic '{topic}' Chunk #{chunk_count} | Length: {len(chunk)} | Content: {chunk!r}")
-
-            sys.stdout.write(chunk)
-            sys.stdout.flush()
-            complete_response += chunk
-    except KeyboardInterrupt:
-        _finish_pending()
-        print(f"\n\n{Colors.RED}解读生成已被中断{Colors.ENDC}")
-    except Exception as e:
-        _finish_pending()
-        print(f"\n\n{Colors.RED}解读生成出错: {e}{Colors.ENDC}")
-    finally:
-        if pending_animation is not None:
-            pending_animation.stop()
-
-    print(f"\n\n{Colors.CYAN}" + "-" * 40 + f"{Colors.ENDC}")
-    return complete_response
+def print_followup_result(topic, content):
+    heading(f"{topic}详解")
+    markdown(content)
 
 
-def display_topic_menu(valid_topics: List[str]) -> None:
-    """
-    Display the interactive menu for selecting a topic to analyze further.
-    
-    Args:
-        valid_topics: List of valid topic options
-    """
-    print(f"\n{Colors.BOLD}您想深入了解哪个方面?{Colors.ENDC}")
-    print(f"{Colors.CYAN}" + "-" * 40 + f"{Colors.ENDC}")
-    
-    # No need to add icons here as they're already in the topic names from the new system-specific topics
-    for i, topic in enumerate(valid_topics, 1):
-        print(f"{Colors.GREEN}{i}.{Colors.ENDC} {topic}")
-    print(f"{Colors.GREEN}0.{Colors.ENDC} 🏠 返回主菜单")
-    
+def print_followup_result_streaming(topic, result_generator, pending_animation=None):
+    return stream_markdown(result_generator, f"{topic}详解", pending_animation)
 
-def get_user_inputs(fortune_system: BaseFortuneSystem) -> Dict[str, Any]:
-    """
-    Get user inputs for a fortune system.
-    
-    Args:
-        fortune_system: Fortune system to get inputs for
-        
-    Returns:
-        Dictionary of user inputs
-    """
+
+def display_topic_menu(valid_topics):
+    heading("您想深入了解哪个方面？")
+    for index, topic in enumerate(valid_topics, 1):
+        message(f"{index}. {topic}", "accent")
+    message("0. 返回主菜单")
+
+
+def get_user_inputs(fortune_system):
     inputs = {}
-    required_inputs = fortune_system.get_required_inputs()
-    
-    print(f"\n{Colors.BOLD}{Colors.YELLOW}✨ 请输入{fortune_system.display_name}所需的信息 ✨{Colors.ENDC}")
-    print(f"{Colors.CYAN}" + "-" * 60 + f"{Colors.ENDC}\n")
-    
-    for name, input_info in required_inputs.items():
-        required = input_info.get("required", False)
-        description = input_info.get("description", name)
-        input_type = input_info.get("type", "text")
-        
-        # Format the prompt
-        prompt = f"{description}"
-        if required:
-            prompt += " (必填)"
-        else:
-            prompt += " (选填，按Enter跳过)"
-        prompt += ": "
-        
-        # Get the input based on type
-        if input_type == "select" and "options" in input_info:
-            from .keyboard_input import pick_from_list
-
-            options = input_info["options"]
-            labels = [
-                f"{o['label']} — {o['description']}" if isinstance(o, dict) else str(o)
-                for o in options
-            ]
+    heading(f"请输入{fortune_system.display_name}所需的信息")
+    for name, info in fortune_system.get_required_inputs().items():
+        required = info.get("required", False)
+        description = info.get("description", name)
+        kind = info.get("type", "text")
+        if kind == "select" and "options" in info:
+            options = info["options"]
+            labels = [f"{o['label']} — {o['description']}" if isinstance(o, dict) else str(o) for o in options]
             while True:
-                idx = pick_from_list(labels, title=description)
-                if idx is not None:
-                    chosen = options[idx]
+                index = pick_from_list(labels, title=description)
+                if index is not None:
+                    chosen = options[index]
                     value = chosen["value"] if isinstance(chosen, dict) else chosen
                     break
                 if not required:
                     value = None
                     break
-                print(f"{Colors.YELLOW}{description} 为必填，请选择一项{Colors.ENDC}")
-            
-        elif input_type == "date":
-            # Date input
-            while True:
-                value = input(prompt)
-                if not value and not required:
-                    break
-                
-                try:
-                    value = datetime.datetime.strptime(value, "%Y-%m-%d").date()
-                    break
-                except ValueError:
-                    print("请输入有效的日期格式 (YYYY-MM-DD)")
-        
-        elif input_type == "time":
-            # Time input
-            while True:
-                value = input(prompt)
-                if not value and not required:
-                    break
-                
-                try:
-                    value = datetime.datetime.strptime(value, "%H:%M").time()
-                    break
-                except ValueError:
-                    print("请输入有效的时间格式 (HH:MM)")
-        
+                message(f"{description} 为必填，请选择一项", "warning")
         else:
-            # Default text input
-            value = input(prompt)
-            if not value and required:
-                while not value:
-                    print("此字段为必填项，请输入有效值")
-                    value = input(prompt)
-        
+            label = description + (" (必填)" if required else " (选填，Enter 跳过)")
+            validator = None
+            if kind in ("date", "time"):
+                fmt = "%Y-%m-%d" if kind == "date" else "%H:%M"
+                def validator(raw, fmt=fmt):
+                    try:
+                        datetime.datetime.strptime(raw, fmt)
+                        return True
+                    except ValueError:
+                        return "请输入有效的日期 (YYYY-MM-DD)" if fmt == "%Y-%m-%d" else "请输入有效的时间 (HH:MM)"
+            value = ask_text(label, required=required, validate=validator)
+            if value and kind == "date":
+                value = datetime.datetime.strptime(value, "%Y-%m-%d").date()
+            elif value and kind == "time":
+                value = datetime.datetime.strptime(value, "%H:%M").time()
         if value or required:
             inputs[name] = value
-    
     return inputs

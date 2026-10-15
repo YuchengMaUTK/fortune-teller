@@ -50,7 +50,7 @@ class PluginManager:
         
         try:
             # List all directories in the plugins directory
-            for item in os.listdir(self.plugins_dir):
+            for item in sorted(os.listdir(self.plugins_dir)):
                 item_path = os.path.join(self.plugins_dir, item)
                 # Check if it's a directory and contains manifest.yaml
                 if (os.path.isdir(item_path) and 

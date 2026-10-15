@@ -30,13 +30,10 @@ def validate_cli_response(mode, transcript, stderr, returncode):
     assert '✓ 解读生成完成' in transcript, 'reading did not complete'
     assert '请选择要深入解读的主题' in transcript, 'follow-up menu not reached'
     assert transcript.rstrip().endswith('已取消选择'), 'normal main-menu exit not reached'
-    expected = {'bazi': ['日主: 甲 (木)', '北京时间'],
+    expected = {'bazi': ['日主', '北京时间', '己卯', '丁丑', '甲子', '庚午'],
                 'tarot': ['过去', '现在', '未来'], 'zodiac': ['摩羯']}
     for term in expected[mode]:
         assert term in transcript, f'missing processed data: {term}'
-    if mode == 'bazi':
-        assert re.search(r'天干:\s+己 \(土\)\s+丁 \(火\)\s+甲 \(木\)\s+庚 \(金\)', transcript)
-        assert re.search(r'地支:\s+卯 \(木\)\s+丑 \(土\)\s+子 \(水\)\s+午 \(火\)', transcript)
     body = transcript.split('✨ 正在生成解读 ✨', 1)[1].split('✓ 解读生成完成', 1)[0]
     reading = body.replace('=' * 60, '').strip()
     assert len(reading) >= 100, f'response too short: {len(reading)}'
@@ -78,11 +75,12 @@ def main():
             events_file.write_text('', encoding='utf-8')
             env = {**os.environ, 'PYTHONPATH': str(REPO), 'FORTUNE_TELLER_STREAMING': 'true',
                    'PYTHONUNBUFFERED': '1', 'E2E_BEDROCK_EVENTS': str(events_file), 'AWS_EC2_METADATA_DISABLED': 'true'}
+            reading_file = args.output_dir.resolve() / f'{mode}-reading.json'
             started = time.monotonic()
             print(f'RUN {mode} (real Bedrock streaming)', flush=True)
             try:
                 process = subprocess.run(
-                    [sys.executable, str(REPO / 'tests/e2e_live_bootstrap.py'), '--lang', 'zh', '--config', str(config)],
+                    [sys.executable, str(REPO / 'tests/e2e_live_bootstrap.py'), '--lang', 'zh', '--config', str(config), '--output', str(reading_file)],
                     input=feed, text=True, capture_output=True, cwd=directory,
                     env=env, timeout=args.timeout,
                 )
@@ -95,8 +93,11 @@ def main():
                 assert stop_reason == 'end_turn', f'model stopped with {stop_reason}'
                 assert any(event['type'] == 'message_stop' for event in events), 'missing terminal stream event'
                 reading = validate_cli_response(mode, transcript, process.stderr, process.returncode)
+                saved = json.loads(reading_file.read_text(encoding='utf-8'))
+                reading = saved['full_text']
+                assert saved['metadata']['system_name'] == mode and len(reading) >= 100
                 (args.output_dir / f'{mode}-reading.md').write_text(reading + '\n', encoding='utf-8')
-                chunks_log = Path(directory) / 'streaming_chunks.log'
+                chunks_log = Path(directory) / 'fortune_teller.log'
                 chunks = chunks_log.read_text(encoding='utf-8') if chunks_log.exists() else ''
                 last = chunks.rsplit('=== START OF STREAMING SESSION ===', 1)[-1]
                 chunk_count = len(re.findall(r'Chunk #\d+ received', last))
